@@ -1,0 +1,100 @@
+openapi: 3.1.0
+info:
+  title: WonderOS API
+  version: 0.1.0
+  description: API-first access to canonical WonderOS knowledge.
+servers:
+  - url: http://localhost:8080
+paths:
+  /v1/entities:
+    post:
+      summary: Create a canonical entity
+      operationId: createEntity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEntityRequest'
+      responses:
+        '201':
+          description: Entity created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /v1/entities/{wonderId}:
+    get:
+      summary: Retrieve a canonical entity
+      operationId: getEntity
+      parameters:
+        - name: wonderId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^WND-[A-Z]{3}-[0-9]{6}$'
+      responses:
+        '200':
+          description: Entity found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  schemas:
+    CreateEntityRequest:
+      type: object
+      required: [canonical_name, family, type]
+      additionalProperties: false
+      properties:
+        canonical_name: { type: string, minLength: 1 }
+        family: { type: string, minLength: 1 }
+        type: { type: string, minLength: 1 }
+        confidence: { type: number, minimum: 0, maximum: 1, default: 0.5 }
+    Entity:
+      type: object
+      required: [wonder_id, canonical_name, slug, family, type, status, confidence, revision]
+      properties:
+        wonder_id: { type: string, example: WND-ENT-000001 }
+        canonical_name: { type: string, example: Barn Owl }
+        slug: { type: string, example: barn-owl }
+        family: { type: string, example: Living Things }
+        type: { type: string, example: Bird }
+        status: { type: string, enum: [draft, review, approved, archived] }
+        confidence: { type: number }
+        revision: { type: integer, minimum: 1 }
+    EntityResponse:
+      type: object
+      required: [success, data, meta, links]
+      properties:
+        success: { type: boolean, const: true }
+        data: { $ref: '#/components/schemas/Entity' }
+        meta: { type: object }
+        links: { type: object }
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success: { type: boolean, const: false }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+  responses:
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Entity not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
