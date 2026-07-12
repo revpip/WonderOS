@@ -16,4 +16,9 @@ interface EntityRepository
     public function get(WonderId $id): Entity;
 
     public function find(WonderId $id): ?Entity;
+
+    /** @return list<Entity> */
+    public function search(string $query, int $limit = 10): array;
+
+    public function findBySlug(string $slug): ?Entity;
 }
