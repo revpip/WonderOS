@@ -14,7 +14,8 @@
   "autoload": {
     "psr-4": {
       "WonderOS\\Core\\": "modules/core/src/",
-      "WonderOS\\Knowledge\\": "modules/knowledge/src/"
+      "WonderOS\\Knowledge\\": "modules/knowledge/src/",
+      "WonderOS\\Api\\": "modules/api/src/"
     }
   },
   "autoload-dev": {
