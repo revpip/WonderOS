@@ -96,21 +96,54 @@ final readonly class PdoEntityRepository implements EntityRepository
         $statement->execute(['wonder_id' => (string) $id]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
 
-        if ($row === false) {
-            return null;
+        return $row === false ? null : $this->hydrate($row);
+    }
+
+    /** @return list<Entity> */
+    public function search(string $query, int $limit = 10): array
+    {
+        $query = trim($query);
+        if ($query === '') {
+            return [];
         }
 
-        return Entity::reconstitute(
-            (string) $row['uuid'],
-            WonderId::parse((string) $row['wonder_id']),
-            (string) $row['canonical_name'],
-            (string) $row['slug'],
-            (string) $row['family'],
-            (string) $row['entity_type'],
-            EntityStatus::from((string) $row['status']),
-            (float) $row['confidence'],
-            (int) $row['revision'],
+        $limit = max(1, min($limit, 50));
+        $like = '%' . $query . '%';
+        $statement = $this->connection->prepare(
+            'SELECT uuid, wonder_id, canonical_name, slug, family, entity_type, status, confidence, revision
+             FROM entities
+             WHERE canonical_name ILIKE :name_query
+                OR slug ILIKE :slug_query
+                OR wonder_id ILIKE :id_query
+             ORDER BY
+                CASE WHEN LOWER(canonical_name) = LOWER(:exact) THEN 0 ELSE 1 END,
+                canonical_name ASC
+             LIMIT :limit',
         );
+        $statement->bindValue('name_query', $like);
+        $statement->bindValue('slug_query', $like);
+        $statement->bindValue('id_query', $like);
+        $statement->bindValue('exact', $query);
+        $statement->bindValue('limit', $limit, PDO::PARAM_INT);
+        $statement->execute();
+
+        return array_map(
+            fn (array $row): Entity => $this->hydrate($row),
+            $statement->fetchAll(PDO::FETCH_ASSOC),
+        );
+    }
+
+    public function findBySlug(string $slug): ?Entity
+    {
+        $statement = $this->connection->prepare(
+            'SELECT uuid, wonder_id, canonical_name, slug, family, entity_type, status, confidence, revision
+             FROM entities
+             WHERE slug = :slug',
+        );
+        $statement->execute(['slug' => trim(strtolower($slug))]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+
+        return $row === false ? null : $this->hydrate($row);
     }
 
     private function insert(Entity $entity): void
@@ -138,6 +171,22 @@ final readonly class PdoEntityRepository implements EntityRepository
 
             throw $exception;
         }
+    }
+
+    /** @param array<string,mixed> $row */
+    private function hydrate(array $row): Entity
+    {
+        return Entity::reconstitute(
+            (string) $row['uuid'],
+            WonderId::parse((string) $row['wonder_id']),
+            (string) $row['canonical_name'],
+            (string) $row['slug'],
+            (string) $row['family'],
+            (string) $row['entity_type'],
+            EntityStatus::from((string) $row['status']),
+            (float) $row['confidence'],
+            (int) $row['revision'],
+        );
     }
 
     /** @return array<string, int|float|string> */

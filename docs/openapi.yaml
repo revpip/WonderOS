@@ -1,12 +1,29 @@
 openapi: 3.1.0
 info:
   title: WonderOS API
-  version: 0.1.0
+  version: 0.2.0
   description: API-first access to canonical WonderOS knowledge.
 servers:
   - url: http://localhost:8080
 paths:
   /v1/entities:
+    get:
+      summary: Search canonical entities
+      operationId: searchEntities
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Ranked canonical entity matches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitySearchResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
     post:
       summary: Create a canonical entity
       operationId: createEntity
@@ -23,6 +40,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EntityResponse'
+        '409':
+          description: A canonical entity with the same slug already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DuplicateEntityResponse'
         '422':
           $ref: '#/components/responses/ValidationError'
   /v1/entities/{wonderId}:
@@ -76,6 +99,33 @@ components:
         data: { $ref: '#/components/schemas/Entity' }
         meta: { type: object }
         links: { type: object }
+    EntitySearchResponse:
+      type: object
+      required: [success, data, meta, links]
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Entity' }
+        meta:
+          type: object
+          required: [count, query]
+          properties:
+            count: { type: integer, minimum: 0 }
+            query: { type: string }
+        links: { type: object }
+    DuplicateEntityResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success: { type: boolean, const: false }
+        error:
+          type: object
+          required: [code, message, existing_entity]
+          properties:
+            code: { type: string, const: ENTITY_ALREADY_EXISTS }
+            message: { type: string }
+            existing_entity: { $ref: '#/components/schemas/Entity' }
     ErrorResponse:
       type: object
       required: [success, error]

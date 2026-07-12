@@ -53,6 +53,28 @@ final class PdoEntityRepositoryTest extends TestCase
         self::assertSame(1, $stored->revision());
     }
 
+    public function test_it_searches_and_prioritises_an_exact_canonical_name(): void
+    {
+        $this->repository->save(Entity::create(
+            $this->repository->nextIdentity(),
+            'Western Barn Owl',
+            'Living Things',
+            'Bird',
+        ));
+        $this->repository->save(Entity::create(
+            $this->repository->nextIdentity(),
+            'Barn Owl',
+            'Living Things',
+            'Bird',
+        ));
+
+        $results = $this->repository->search('Barn Owl');
+
+        self::assertCount(2, $results);
+        self::assertSame('Barn Owl', $results[0]->canonicalName());
+        self::assertSame('WND-ENT-000002', (string) $this->repository->findBySlug('barn-owl')?->id());
+    }
+
     public function test_it_rejects_a_stale_database_revision(): void
     {
         $id = $this->repository->nextIdentity();

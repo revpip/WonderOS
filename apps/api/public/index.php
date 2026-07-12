@@ -28,6 +28,11 @@ $pdo = new PDO((string) getenv('DATABASE_DSN'), (string) getenv('DATABASE_USER')
 ]);
 
 $api = new EntityApi(new PdoEntityRepository($pdo));
-$response = $api->handle($_SERVER['REQUEST_METHOD'] ?? 'GET', parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', file_get_contents('php://input') ?: '');
+$response = $api->handle(
+    $_SERVER['REQUEST_METHOD'] ?? 'GET',
+    parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/',
+    file_get_contents('php://input') ?: '',
+    $_GET,
+);
 http_response_code($response['status']);
 echo json_encode($response['body'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
