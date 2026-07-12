@@ -13,19 +13,24 @@ use WonderOS\Knowledge\Entity\Entity;
 use WonderOS\Knowledge\Entity\EntityNotFound;
 use WonderOS\Knowledge\Entity\EntityRepository;
 
-/** Provides the first HTTP-facing entity use cases without owning domain rules. */
+/** Provides HTTP-facing entity use cases without owning domain or persistence rules. */
 final readonly class EntityApi
 {
     public function __construct(private EntityRepository $entities)
     {
     }
 
+    /** @param array<string,mixed> $query */
     /** @return array{status:int,body:array<string,mixed>} */
-    public function handle(string $method, string $path, string $rawBody = ''): array
+    public function handle(string $method, string $path, string $rawBody = '', array $query = []): array
     {
         try {
             if ($method === 'POST' && $path === '/v1/entities') {
                 return $this->create($this->decode($rawBody));
+            }
+
+            if ($method === 'GET' && $path === '/v1/entities') {
+                return $this->search($query);
             }
 
             if ($method === 'GET' && preg_match('#^/v1/entities/(WND-[A-Z]{3}-\d{6})$#i', $path, $matches)) {
@@ -51,9 +56,24 @@ final readonly class EntityApi
             }
         }
 
-        $id = $this->entities->nextIdentity();
+        $candidateSlug = $this->slugify($payload['canonical_name']);
+        $existing = $this->entities->findBySlug($candidateSlug);
+        if ($existing !== null) {
+            return [
+                'status' => 409,
+                'body' => [
+                    'success' => false,
+                    'error' => [
+                        'code' => 'ENTITY_ALREADY_EXISTS',
+                        'message' => sprintf('%s already exists as %s.', $existing->canonicalName(), (string) $existing->id()),
+                        'existing_entity' => $this->serialize($existing),
+                    ],
+                ],
+            ];
+        }
+
         $entity = Entity::create(
-            $id,
+            $this->entities->nextIdentity(),
             $payload['canonical_name'],
             $payload['family'],
             $payload['type'],
@@ -62,6 +82,30 @@ final readonly class EntityApi
         $this->entities->save($entity);
 
         return ['status' => 201, 'body' => $this->success($this->serialize($entity))];
+    }
+
+    /** @param array<string,mixed> $query */
+    private function search(array $query): array
+    {
+        $term = isset($query['query']) && is_string($query['query']) ? trim($query['query']) : '';
+        if ($term === '') {
+            throw new InvalidArgumentException('query is required.');
+        }
+
+        $results = array_map(
+            fn (Entity $entity): array => $this->serialize($entity),
+            $this->entities->search($term, 20),
+        );
+
+        return [
+            'status' => 200,
+            'body' => [
+                'success' => true,
+                'data' => $results,
+                'meta' => ['count' => count($results), 'query' => $term],
+                'links' => (object) [],
+            ],
+        ];
     }
 
     private function show(string $wonderId): array
@@ -105,5 +149,12 @@ final readonly class EntityApi
     private function error(int $status, string $code, string $message): array
     {
         return ['status' => $status, 'body' => ['success' => false, 'error' => ['code' => $code, 'message' => $message]]];
+    }
+
+    private function slugify(string $value): string
+    {
+        $value = strtolower(trim($value));
+        $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
+        return trim($value, '-');
     }
 }
