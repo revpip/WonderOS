@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+/vendor/
+/node_modules/
+coverage/
+build/
+dist/
+.phpunit.result.cache
+.php-cs-fixer.cache
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
