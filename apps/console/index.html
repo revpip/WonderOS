@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Wonder Console</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">Wonder<span>OS</span></div>
+      <nav>
+        <button class="nav-item active" data-view="knowledge">Knowledge</button>
+        <button class="nav-item" disabled>Editorial</button>
+        <button class="nav-item" disabled>Publishing</button>
+      </nav>
+      <div class="sidebar-foot">Genesis · Entity Workspace</div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div class="search-wrap">
+          <label for="search">Search entities</label>
+          <input id="search" autocomplete="off" placeholder="Search by Wonder ID or name…">
+          <kbd>⌘K</kbd>
+        </div>
+        <button id="new-entity" class="primary">New entity</button>
+      </header>
+
+      <section id="workspace" class="workspace" aria-live="polite">
+        <div class="empty-state">
+          <p class="eyebrow">Your knowledge graph begins here</p>
+          <h1>Create or open your first canonical entity.</h1>
+          <p>WonderOS stores knowledge independently of pages and publishing channels. Start with Barn Owl or paste a Wonder ID into search.</p>
+          <div class="empty-actions">
+            <button id="create-barn-owl" class="primary">Create Barn Owl</button>
+            <button id="open-by-id" class="secondary">Open WND-ENT-000001</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="entity-dialog">
+    <form id="entity-form" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Canonical knowledge</p>
+          <h2>Create entity</h2>
+        </div>
+        <button type="button" id="close-dialog" class="icon-button" aria-label="Close">×</button>
+      </div>
+      <label>Canonical name<input name="canonical_name" required></label>
+      <label>Family<input name="family" required placeholder="Living Things"></label>
+      <label>Type<input name="type" required placeholder="Bird"></label>
+      <label>Confidence<input name="confidence" type="number" min="0" max="1" step="0.01" value="0.50"></label>
+      <div id="form-error" class="form-error" hidden></div>
+      <div class="dialog-actions">
+        <button type="button" id="cancel-dialog" class="secondary">Cancel</button>
+        <button type="submit" class="primary">Create entity</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
