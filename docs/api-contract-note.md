@@ -1,0 +1,1 @@
+The canonical API contract is maintained in `docs/openapi.yaml`. Runtime handlers must remain thin adapters over application and domain services.
