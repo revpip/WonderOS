@@ -108,18 +108,21 @@ final readonly class PdoEntityRepository implements EntityRepository
         }
 
         $limit = max(1, min($limit, 50));
+        $like = '%' . $query . '%';
         $statement = $this->connection->prepare(
             'SELECT uuid, wonder_id, canonical_name, slug, family, entity_type, status, confidence, revision
              FROM entities
-             WHERE canonical_name ILIKE :query
-                OR slug ILIKE :query
-                OR wonder_id ILIKE :query
+             WHERE canonical_name ILIKE :name_query
+                OR slug ILIKE :slug_query
+                OR wonder_id ILIKE :id_query
              ORDER BY
                 CASE WHEN LOWER(canonical_name) = LOWER(:exact) THEN 0 ELSE 1 END,
                 canonical_name ASC
              LIMIT :limit',
         );
-        $statement->bindValue('query', '%' . $query . '%');
+        $statement->bindValue('name_query', $like);
+        $statement->bindValue('slug_query', $like);
+        $statement->bindValue('id_query', $like);
         $statement->bindValue('exact', $query);
         $statement->bindValue('limit', $limit, PDO::PARAM_INT);
         $statement->execute();
