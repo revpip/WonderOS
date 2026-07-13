@@ -16,17 +16,21 @@ use WonderOS\Knowledge\Entity\EntityNotFound;
 use WonderOS\Knowledge\Entity\EntityRepository;
 use WonderOS\Knowledge\Relationship\Relationship;
 use WonderOS\Knowledge\Relationship\RelationshipRepository;
+use WonderOS\Knowledge\Relationship\RelationshipType;
+use WonderOS\Knowledge\Relationship\RelationshipTypeRepository;
 
 final readonly class EntityApi
 {
     public function __construct(
         private EntityRepository $entities,
         private ?RelationshipRepository $relationships = null,
+        private ?RelationshipTypeRepository $relationshipTypes = null,
     ) {}
 
     public function handle(string $method, string $path, string $rawBody = '', array $query = []): array
     {
         try {
+            if ($method === 'GET' && $path === '/v1/relationship-types') return $this->listRelationshipTypes();
             if ($method === 'POST' && $path === '/v1/entities') return $this->create($this->decode($rawBody));
             if ($method === 'GET' && $path === '/v1/entities') return $this->search($query);
             if (preg_match('#^/v1/entities/(WND-[A-Z]{3}-\d{6})/aliases$#i', $path, $matches)) {
@@ -92,12 +96,15 @@ final readonly class EntityApi
     private function addRelationship(string $sourceId, array $payload): array
     {
         $repository = $this->relationships ?? throw new DomainException('Relationship storage is unavailable.');
+        $vocabulary = $this->relationshipTypes ?? throw new DomainException('Relationship vocabulary is unavailable.');
         foreach (['target_wonder_id','type'] as $required) if (!isset($payload[$required]) || !is_string($payload[$required]) || trim($payload[$required]) === '') throw new InvalidArgumentException(sprintf('%s is required.', $required));
         $source = WonderId::parse($sourceId);
         $target = WonderId::parse($payload['target_wonder_id']);
         $this->entities->get($source);
         $this->entities->get($target);
-        $relationship = Relationship::create($source,$target,$payload['type'],isset($payload['context'])&&is_string($payload['context'])?$payload['context']:null,isset($payload['confidence'])?(float)$payload['confidence']:0.5);
+        $approvedType = $vocabulary->get($payload['type']);
+        if ($approvedType->status !== 'active') throw new DomainException(sprintf('Relationship type "%s" is deprecated.', $approvedType->type));
+        $relationship = Relationship::create($source,$target,$approvedType->type,isset($payload['context'])&&is_string($payload['context'])?$payload['context']:null,isset($payload['confidence'])?(float)$payload['confidence']:0.5);
         $repository->save($relationship);
         return ['status'=>201,'body'=>$this->success($this->serializeRelationship($relationship))];
     }
@@ -111,10 +118,18 @@ final readonly class EntityApi
         return ['status'=>200,'body'=>['success'=>true,'data'=>$items,'meta'=>['count'=>count($items)],'links'=>(object)[]]];
     }
 
+    private function listRelationshipTypes(): array
+    {
+        $repository = $this->relationshipTypes ?? throw new DomainException('Relationship vocabulary is unavailable.');
+        $items = array_map(fn(RelationshipType $type): array => $this->serializeRelationshipType($type), $repository->active());
+        return ['status'=>200,'body'=>['success'=>true,'data'=>$items,'meta'=>['count'=>count($items)],'links'=>(object)[]]];
+    }
+
     private function decode(string $rawBody): array { $decoded=json_decode($rawBody,true,512,JSON_THROW_ON_ERROR); if(!is_array($decoded)) throw new InvalidArgumentException('Request body must be a JSON object.'); return $decoded; }
     private function serialize(Entity $entity): array { return ['wonder_id'=>(string)$entity->id(),'canonical_name'=>$entity->canonicalName(),'slug'=>$entity->slug(),'family'=>$entity->family(),'type'=>$entity->type(),'status'=>$entity->status()->value,'confidence'=>$entity->confidence(),'revision'=>$entity->revision()]; }
     private function serializeAlias(EntityAlias $alias): array { return ['alias'=>$alias->alias,'type'=>$alias->type->value,'language'=>$alias->language]; }
     private function serializeRelationship(Relationship $relationship): array { return ['uuid'=>$relationship->uuid(),'source_wonder_id'=>(string)$relationship->sourceId(),'target_wonder_id'=>(string)$relationship->targetId(),'type'=>$relationship->type(),'context'=>$relationship->context(),'confidence'=>$relationship->confidence(),'status'=>$relationship->status()]; }
+    private function serializeRelationshipType(RelationshipType $type): array { return ['type'=>$type->type,'inverse_type'=>$type->inverseType,'label'=>$type->label,'inverse_label'=>$type->inverseLabel,'description'=>$type->description,'symmetric'=>$type->symmetric,'status'=>$type->status]; }
     private function success(array $data): array { return ['success'=>true,'data'=>$data,'meta'=>(object)[],'links'=>(object)[]]; }
     private function error(int $status,string $code,string $message): array { return ['status'=>$status,'body'=>['success'=>false,'error'=>['code'=>$code,'message'=>$message]]]; }
     private function slugify(string $value): string { $value=strtolower(trim($value)); $value=preg_replace('/[^a-z0-9]+/','-',$value)??''; return trim($value,'-'); }

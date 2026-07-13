@@ -6,6 +6,7 @@ use PDO;
 use WonderOS\Api\EntityApi;
 use WonderOS\Knowledge\Infrastructure\Persistence\PdoEntityRepository;
 use WonderOS\Knowledge\Infrastructure\Persistence\PdoRelationshipRepository;
+use WonderOS\Knowledge\Infrastructure\Persistence\PdoRelationshipTypeRepository;
 
 require dirname(__DIR__, 3) . '/vendor/autoload.php';
 
@@ -31,6 +32,7 @@ $pdo = new PDO((string) getenv('DATABASE_DSN'), (string) getenv('DATABASE_USER')
 $api = new EntityApi(
     new PdoEntityRepository($pdo),
     new PdoRelationshipRepository($pdo),
+    new PdoRelationshipTypeRepository($pdo),
 );
 $response = $api->handle(
     $_SERVER['REQUEST_METHOD'] ?? 'GET',
