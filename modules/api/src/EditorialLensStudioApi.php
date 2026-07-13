@@ -41,23 +41,16 @@ final readonly class EditorialLensStudioApi
             $slug = $matches[1] ?? '';
             $action = $matches[2] ?? null;
 
-            if ($method === 'PUT' && $action === null) {
-                return $this->revise($slug, $this->decode($rawBody), $editor);
-            }
-            if ($method === 'POST' && $action === 'activate') {
-                return $this->activate($slug, $this->decode($rawBody), $editor);
-            }
-            if ($method === 'POST' && $action === 'deprecate') {
-                return $this->deprecate($slug, $this->decode($rawBody), $editor);
-            }
-            if ($method === 'POST' && $action === 'preview') {
-                return $this->preview($slug, $this->decode($rawBody));
-            }
-            if ($method === 'GET' && $action === 'revisions') {
-                return $this->revisions($slug);
-            }
-
-            return $this->error(405, 'METHOD_NOT_ALLOWED', 'The Editorial Lens Studio method is not supported.');
+            return match (true) {
+                $method === 'PUT' && $action === null => $this->revise($slug, $this->decode($rawBody), $editor),
+                $method === 'POST' && $action === 'activate' => $this->activate($slug, $this->decode($rawBody), $editor),
+                $method === 'POST' && $action === 'deprecate' => $this->deprecate($slug, $this->decode($rawBody), $editor),
+                $method === 'POST' && $action === 'preview' => $this->preview($slug, $this->decode($rawBody)),
+                $method === 'GET' && $action === 'revisions' => $this->revisions($slug),
+                default => $this->error(405, 'METHOD_NOT_ALLOWED', 'The Editorial Lens Studio method is not supported.'),
+            };
+        } catch (EditorialAuthorizationFailed $exception) {
+            return $this->error(401, 'EDITORIAL_AUTHORISATION_FAILED', $exception->getMessage());
         } catch (JsonException|InvalidArgumentException|DomainException $exception) {
             return $this->error(422, 'VALIDATION_FAILED', $exception->getMessage());
         } catch (EntityNotFound $exception) {
@@ -69,9 +62,7 @@ final readonly class EditorialLensStudioApi
 
     private function create(array $payload, string $editor): array
     {
-        foreach (['slug','name','description'] as $required) {
-            $this->requiredString($payload, $required);
-        }
+        foreach (['slug', 'name', 'description'] as $required) $this->requiredString($payload, $required);
         $lens = EditorialLens::create(
             trim($payload['slug']),
             trim($payload['name']),
@@ -85,7 +76,7 @@ final readonly class EditorialLensStudioApi
 
     private function revise(string $slug, array $payload, string $editor): array
     {
-        foreach (['name','description','expected_revision'] as $required) {
+        foreach (['name', 'description', 'expected_revision'] as $required) {
             if (!array_key_exists($required, $payload)) throw new InvalidArgumentException(sprintf('%s is required.', $required));
         }
         $current = $this->lenses->get($slug);
@@ -123,10 +114,7 @@ final readonly class EditorialLensStudioApi
         $depth = isset($payload['depth']) ? $this->integer($payload['depth'], 'depth') : 2;
         $maxNodes = isset($payload['max_nodes']) ? $this->integer($payload['max_nodes'], 'max_nodes') : 100;
         $graph = $this->graph->traverse(WonderId::parse($payload['root_wonder_id']), $depth, $maxNodes, $lens->filter);
-        return ['status' => 200, 'body' => $this->success([
-            'lens' => $this->serialise($lens),
-            'preview' => $graph,
-        ])];
+        return ['status' => 200, 'body' => $this->success(['lens' => $this->serialise($lens), 'preview' => $graph])];
     }
 
     private function revisions(string $slug): array
@@ -141,14 +129,11 @@ final readonly class EditorialLensStudioApi
         ]];
     }
 
-    /** @param array<string,mixed> $payload */
     private function filter(array $payload): GraphFilter
     {
         $types = $payload['types'] ?? [];
         $statuses = $payload['statuses'] ?? [];
-        if (!is_array($types) || !is_array($statuses)) {
-            throw new InvalidArgumentException('types and statuses must be arrays.');
-        }
+        if (!is_array($types) || !is_array($statuses)) throw new InvalidArgumentException('types and statuses must be arrays.');
         foreach (array_merge($types, $statuses) as $value) {
             if (!is_string($value)) throw new InvalidArgumentException('Lens filter values must be strings.');
         }
@@ -159,15 +144,14 @@ final readonly class EditorialLensStudioApi
         );
     }
 
-    /** @param array<string,mixed> $headers */
     private function authorise(array $headers): string
     {
         $provided = (string)($headers['x-wonderos-editor-key'] ?? '');
         if ($this->editorialKey === '' || $provided === '' || !hash_equals($this->editorialKey, $provided)) {
-            throw new DomainException('Editorial Lens Studio authorisation failed.');
+            throw new EditorialAuthorizationFailed('Editorial Lens Studio authorisation failed.');
         }
         $editor = trim((string)($headers['x-wonderos-editor'] ?? ''));
-        if ($editor === '') throw new DomainException('X-WonderOS-Editor is required.');
+        if ($editor === '') throw new EditorialAuthorizationFailed('X-WonderOS-Editor is required.');
         return $editor;
     }
 
