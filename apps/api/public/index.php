@@ -45,8 +45,11 @@ foreach (function_exists('getallheaders') ? getallheaders() : [] as $name => $va
     $headers[strtolower((string)$name)] = (string)$value;
 }
 
-$studioApi = new EditorialLensStudioApi($lenses, $graph, (string)getenv('EDITORIAL_API_KEY'));
-$response = $studioApi->handle($method, $path, $rawBody, $headers);
+$response = null;
+if (!($method === 'GET' && $path === '/v1/editorial-lenses')) {
+    $studioApi = new EditorialLensStudioApi($lenses, $graph, (string)getenv('EDITORIAL_API_KEY'));
+    $response = $studioApi->handle($method, $path, $rawBody, $headers);
+}
 
 if ($response === null) {
     $graphApi = new GraphApi($graph, $lenses);
