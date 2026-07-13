@@ -112,4 +112,17 @@ final readonly class PdoClaimRepository implements ClaimRepository
         $statement->execute(['claim'=>$claimWonderId]);
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    public function reviewQueue(array $statuses, int $limit = 100): array
+    {
+        $statuses=array_values(array_intersect($statuses,['draft','review','disputed']));
+        if($statuses===[]) $statuses=['draft','review','disputed'];
+        $placeholders=[]; $parameters=['limit'=>max(1,min(250,$limit))];
+        foreach($statuses as $index=>$status){$key='status'.$index;$placeholders[]=':'.$key;$parameters[$key]=$status;}
+        $sql='SELECT c.*,e.canonical_name AS entity_name,(SELECT COUNT(*) FROM wonder_evidence we WHERE we.claim_wonder_id=c.wonder_id) AS evidence_count FROM wonder_claims c JOIN entities e ON e.wonder_id=c.entity_wonder_id WHERE c.status IN ('.implode(',',$placeholders).') ORDER BY CASE c.status WHEN \'disputed\' THEN 0 WHEN \'review\' THEN 1 ELSE 2 END,c.updated_at NULLS LAST,c.created_at LIMIT :limit';
+        $statement=$this->connection->prepare($sql);
+        foreach($parameters as $key=>$value){$statement->bindValue(':'.$key,$value,$key==='limit'?PDO::PARAM_INT:PDO::PARAM_STR);}
+        $statement->execute();
+        return $statement->fetchAll(PDO::FETCH_ASSOC);
+    }
 }
