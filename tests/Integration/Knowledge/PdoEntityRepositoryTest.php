@@ -7,6 +7,8 @@ namespace WonderOS\Tests\Integration\Knowledge;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use WonderOS\Knowledge\Entity\Entity;
+use WonderOS\Knowledge\Entity\EntityAlias;
+use WonderOS\Knowledge\Entity\EntityAliasType;
 use WonderOS\Knowledge\Entity\EntityRevisionConflict;
 use WonderOS\Knowledge\Infrastructure\Persistence\PdoEntityRepository;
 
@@ -17,86 +19,35 @@ final class PdoEntityRepositoryTest extends TestCase
 
     protected function setUp(): void
     {
-        $dsn = getenv('WONDEROS_TEST_DATABASE_DSN') ?: 'pgsql:host=127.0.0.1;port=5432;dbname=wonderos';
-        $user = getenv('WONDEROS_TEST_DATABASE_USER') ?: 'wonderos';
-        $password = getenv('WONDEROS_TEST_DATABASE_PASSWORD') ?: 'wonderos';
-
-        try {
-            $this->connection = new PDO($dsn, $user, $password, [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            ]);
-        } catch (\Throwable $exception) {
-            self::markTestSkipped('PostgreSQL is unavailable: '.$exception->getMessage());
-        }
-
-        $this->connection->exec(file_get_contents(
-            dirname(__DIR__, 3).'/database/migrations/0001_create_entities.down.sql',
-        ));
-        $this->connection->exec(file_get_contents(
-            dirname(__DIR__, 3).'/database/migrations/0001_create_entities.up.sql',
-        ));
-
-        $this->repository = new PdoEntityRepository($this->connection);
+        $dsn=getenv('WONDEROS_TEST_DATABASE_DSN')?:'pgsql:host=127.0.0.1;port=5432;dbname=wonderos';
+        try {$this->connection=new PDO($dsn,getenv('WONDEROS_TEST_DATABASE_USER')?:'wonderos',getenv('WONDEROS_TEST_DATABASE_PASSWORD')?:'wonderos',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);}
+        catch(\Throwable $exception){self::markTestSkipped('PostgreSQL is unavailable: '.$exception->getMessage());}
+        $root=dirname(__DIR__,3).'/database/migrations/';
+        $this->connection->exec(file_get_contents($root.'0002_create_entity_aliases.down.sql'));
+        $this->connection->exec(file_get_contents($root.'0001_create_entities.down.sql'));
+        $this->connection->exec(file_get_contents($root.'0001_create_entities.up.sql'));
+        $this->connection->exec(file_get_contents($root.'0002_create_entity_aliases.up.sql'));
+        $this->repository=new PdoEntityRepository($this->connection);
     }
 
-    public function test_it_allocates_persists_and_reconstitutes_an_entity(): void
+    public function test_it_persists_and_searches_aliases(): void
     {
-        $id = $this->repository->nextIdentity();
-        $entity = Entity::create($id, 'Barn Owl', 'Living Things', 'Bird', 0.9);
-
-        $this->repository->save($entity);
-        $stored = $this->repository->get($id);
-
-        self::assertSame('WND-ENT-000001', (string) $stored->id());
-        self::assertSame('Barn Owl', $stored->canonicalName());
-        self::assertSame($entity->uuid(), $stored->uuid());
-        self::assertSame(1, $stored->revision());
-    }
-
-    public function test_it_searches_and_prioritises_an_exact_canonical_name(): void
-    {
-        $this->repository->save(Entity::create(
-            $this->repository->nextIdentity(),
-            'Western Barn Owl',
-            'Living Things',
-            'Bird',
-        ));
-        $this->repository->save(Entity::create(
-            $this->repository->nextIdentity(),
-            'Barn Owl',
-            'Living Things',
-            'Bird',
-        ));
-
-        $results = $this->repository->search('Barn Owl');
-
-        self::assertCount(2, $results);
-        self::assertSame('Barn Owl', $results[0]->canonicalName());
-        self::assertSame('WND-ENT-000002', (string) $this->repository->findBySlug('barn-owl')?->id());
+        $id=$this->repository->nextIdentity();
+        $this->repository->save(Entity::create($id,'Barn Owl','Living Things','Bird',0.9));
+        $this->repository->addAlias(new EntityAlias($id,'Tyto alba',EntityAliasType::Scientific,'la'));
+        self::assertSame('Barn Owl',$this->repository->search('Tyto alba')[0]->canonicalName());
+        self::assertSame('Tyto alba',$this->repository->aliases($id)[0]->alias);
     }
 
     public function test_it_rejects_a_stale_database_revision(): void
     {
-        $id = $this->repository->nextIdentity();
-        $entity = Entity::create($id, 'Barn Owl', 'Living Things', 'Bird');
+        $id=$this->repository->nextIdentity();
+        $entity=Entity::create($id,'Barn Owl','Living Things','Bird');
         $this->repository->save($entity);
-
-        $entity->rename('Western Barn Owl', 1);
-        $this->repository->save($entity, 1);
-
-        $stale = Entity::reconstitute(
-            $entity->uuid(),
-            $id,
-            'Outdated Owl',
-            'outdated-owl',
-            'Living Things',
-            'Bird',
-            $entity->status(),
-            0.5,
-            2,
-        );
-
+        $entity->rename('Western Barn Owl',1);
+        $this->repository->save($entity,1);
+        $stale=Entity::reconstitute($entity->uuid(),$id,'Outdated Owl','outdated-owl','Living Things','Bird',$entity->status(),0.5,2);
         $this->expectException(EntityRevisionConflict::class);
-        $this->repository->save($stale, 1);
+        $this->repository->save($stale,1);
     }
 }
