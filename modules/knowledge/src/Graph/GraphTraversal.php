@@ -12,7 +12,7 @@ use WonderOS\Knowledge\Relationship\Relationship;
 use WonderOS\Knowledge\Relationship\RelationshipRepository;
 use WonderOS\Knowledge\Relationship\RelationshipTypeRepository;
 
-/** Builds a bounded, cycle-safe view of connected canonical knowledge. */
+/** Builds a bounded, filtered and cycle-safe view of connected canonical knowledge. */
 final readonly class GraphTraversal
 {
     public function __construct(
@@ -22,9 +22,13 @@ final readonly class GraphTraversal
     ) {
     }
 
-    /** @return array{root_wonder_id:string,depth:int,nodes:list<array<string,mixed>>,edges:list<array<string,mixed>>,truncated:bool} */
-    public function traverse(WonderId $rootId, int $depth = 1, int $maxNodes = 100): array
-    {
+    /** @return array{root_wonder_id:string,depth:int,filters:array<string,mixed>,nodes:list<array<string,mixed>>,edges:list<array<string,mixed>>,truncated:bool} */
+    public function traverse(
+        WonderId $rootId,
+        int $depth = 1,
+        int $maxNodes = 100,
+        ?GraphFilter $filter = null,
+    ): array {
         if ($depth < 1 || $depth > 3) {
             throw new DomainException('Graph depth must be between 1 and 3.');
         }
@@ -32,6 +36,7 @@ final readonly class GraphTraversal
             throw new DomainException('Graph max_nodes must be between 1 and 250.');
         }
 
+        $filter ??= new GraphFilter();
         $root = $this->entities->get($rootId);
         $visited = [(string) $rootId => true];
         $queue = [[$rootId, 0]];
@@ -47,6 +52,10 @@ final readonly class GraphTraversal
             }
 
             foreach ($this->relationships->forEntity($currentId) as $relationship) {
+                if (!$filter->accepts($relationship)) {
+                    continue;
+                }
+
                 $relatedId = $relationship->relatedEntityIdFor($currentId);
                 $relatedKey = (string) $relatedId;
 
@@ -73,6 +82,7 @@ final readonly class GraphTraversal
         return [
             'root_wonder_id' => (string) $rootId,
             'depth' => $depth,
+            'filters' => $filter->toArray(),
             'nodes' => array_values($nodes),
             'edges' => $edges,
             'truncated' => $truncated,
