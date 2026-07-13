@@ -72,6 +72,32 @@ final readonly class Relationship
     public function confidence(): float { return $this->confidence; }
     public function status(): string { return $this->status; }
 
+    public function isOutgoingFrom(WonderId $entityId): bool
+    {
+        return (string) $this->sourceId === (string) $entityId;
+    }
+
+    public function isIncomingTo(WonderId $entityId): bool
+    {
+        return (string) $this->targetId === (string) $entityId;
+    }
+
+    public function relatedEntityIdFor(WonderId $entityId): WonderId
+    {
+        if ($this->isOutgoingFrom($entityId)) {
+            return $this->targetId;
+        }
+        if ($this->isIncomingTo($entityId)) {
+            return $this->sourceId;
+        }
+
+        throw new DomainException(sprintf(
+            'Entity %s is not part of relationship %s.',
+            (string) $entityId,
+            $this->uuid,
+        ));
+    }
+
     private static function normaliseType(string $value): string
     {
         $value = strtolower(trim($value));
