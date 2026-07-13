@@ -28,8 +28,12 @@ final readonly class PdoEditorialLensRepository implements EditorialLensReposito
 
     public function active(): array
     {
-        $rows = $this->connection->query("SELECT slug, name, description, relationship_types, relationship_statuses, minimum_confidence, status, revision, updated_by FROM editorial_lenses WHERE status = 'active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-        return array_map(fn(array $row): EditorialLens => $this->hydrate($row), $rows);
+        return $this->select("WHERE status = 'active' ORDER BY name");
+    }
+
+    public function all(): array
+    {
+        return $this->select('ORDER BY name');
     }
 
     public function save(EditorialLens $lens, ?int $expectedRevision = null): void
@@ -110,6 +114,15 @@ final readonly class PdoEditorialLensRepository implements EditorialLensReposito
                 'changed_at' => (string)$row['changed_at'],
             ];
         }, $statement->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    /** @return list<EditorialLens> */
+    private function select(string $clause): array
+    {
+        $rows = $this->connection->query(
+            'SELECT slug, name, description, relationship_types, relationship_statuses, minimum_confidence, status, revision, updated_by FROM editorial_lenses ' . $clause
+        )->fetchAll(PDO::FETCH_ASSOC);
+        return array_map(fn(array $row): EditorialLens => $this->hydrate($row), $rows);
     }
 
     private function hydrate(array $row): EditorialLens

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 use PDO;
 use WonderOS\Api\EditorialLensStudioApi;
+use WonderOS\Api\EditorialLensStudioReadApi;
 use WonderOS\Api\EntityApi;
 use WonderOS\Api\GraphApi;
 use WonderOS\Knowledge\Graph\GraphTraversal;
@@ -45,9 +46,12 @@ foreach (function_exists('getallheaders') ? getallheaders() : [] as $name => $va
     $headers[strtolower((string)$name)] = (string)$value;
 }
 
-$response = null;
-if (!($method === 'GET' && $path === '/v1/editorial-lenses')) {
-    $studioApi = new EditorialLensStudioApi($lenses, $graph, (string)getenv('EDITORIAL_API_KEY'));
+$editorialKey = (string)getenv('EDITORIAL_API_KEY');
+$studioReadApi = new EditorialLensStudioReadApi($lenses, $editorialKey);
+$response = $studioReadApi->handle($method, $path, $headers);
+
+if ($response === null && !($method === 'GET' && $path === '/v1/editorial-lenses')) {
+    $studioApi = new EditorialLensStudioApi($lenses, $graph, $editorialKey);
     $response = $studioApi->handle($method, $path, $rawBody, $headers);
 }
 

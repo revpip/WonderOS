@@ -10,6 +10,9 @@ interface EditorialLensRepository
     /** @return list<EditorialLens> */
     public function active(): array;
 
+    /** @return list<EditorialLens> */
+    public function all(): array;
+
     public function save(EditorialLens $lens, ?int $expectedRevision = null): void;
 
     /** @return list<array<string,mixed>> */

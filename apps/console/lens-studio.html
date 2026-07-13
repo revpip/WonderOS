@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Editorial Lens Studio · WonderOS</title>
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./lens-studio.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">Wonder<span>OS</span></div>
+      <nav>
+        <a class="nav-item" href="./index.html">Knowledge</a>
+        <a class="nav-item active" href="./lens-studio.html">Editorial lenses</a>
+        <button class="nav-item" disabled>Publishing</button>
+      </nav>
+      <div class="sidebar-foot">Genesis · Lens Studio</div>
+    </aside>
+
+    <main>
+      <header class="topbar studio-topbar">
+        <div>
+          <p class="eyebrow">Editorial governance</p>
+          <h1>Lens Studio</h1>
+        </div>
+        <button id="new-lens" class="primary">New lens</button>
+      </header>
+
+      <section class="studio-shell">
+        <aside class="lens-library card">
+          <div class="library-head">
+            <h2>Shared lenses</h2>
+            <button id="refresh" class="secondary">Refresh</button>
+          </div>
+          <div id="lens-list" class="lens-list"><p class="muted">Connect to load editorial lenses.</p></div>
+        </aside>
+
+        <section class="studio-workspace">
+          <div class="credentials card">
+            <label>Editor identity<input id="editor" placeholder="editor@example.com"></label>
+            <label>Editorial key<input id="editor-key" type="password" autocomplete="off" placeholder="Local development key"></label>
+            <button id="connect" class="secondary">Connect</button>
+          </div>
+
+          <form id="lens-form" class="card lens-form">
+            <div class="form-heading">
+              <div>
+                <p class="eyebrow">Lens definition</p>
+                <h2 id="form-title">Create a purposeful graph view</h2>
+              </div>
+              <span id="lifecycle" class="status">new</span>
+            </div>
+
+            <div class="two-column">
+              <label>Slug<input name="slug" required placeholder="sacred-landscape"></label>
+              <label>Name<input name="name" required placeholder="Sacred Landscape"></label>
+            </div>
+            <label>Description<textarea name="description" required rows="3" placeholder="Explain what this editorial lens reveals."></textarea></label>
+            <label>Relationship types<input name="types" placeholder="located_in, symbolises, influenced"></label>
+            <label>Relationship statuses<input name="statuses" placeholder="approved, review"></label>
+            <label>Minimum confidence
+              <div class="range-row"><input name="minimum_confidence" id="confidence" type="range" min="0" max="1" step="0.05" value="0.5"><output id="confidence-output">0.50</output></div>
+            </label>
+
+            <div id="studio-message" class="form-error" hidden></div>
+            <div class="studio-actions">
+              <button id="save" type="submit" class="primary">Save draft</button>
+              <button id="preview" type="button" class="secondary">Preview</button>
+              <button id="activate" type="button" class="secondary">Activate</button>
+              <button id="deprecate" type="button" class="danger-button">Deprecate</button>
+            </div>
+          </form>
+
+          <div class="studio-lower">
+            <section class="card">
+              <div class="panel-head"><h2>Live preview</h2><input id="preview-root" value="WND-ENT-000001" aria-label="Preview root Wonder ID"></div>
+              <div id="preview-panel" class="preview-panel muted">Choose a lens and preview it against a canonical entity.</div>
+            </section>
+            <section class="card">
+              <h2>Revision history</h2>
+              <div id="history-panel" class="history-list muted">Saved revisions will appear here.</div>
+            </section>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+  <script src="./lens-studio.js" defer></script>
+</body>
+</html>
