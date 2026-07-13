@@ -1,0 +1,24 @@
+const API_BASE=localStorage.getItem('wonderos_api_base')||'http://localhost:8080';
+const token=sessionStorage.getItem('wonderos_session_token');
+const form=document.querySelector('#user-form');
+const list=document.querySelector('#user-list');
+const activity=document.querySelector('#activity');
+const message=document.querySelector('#message');
+let current=null;
+
+function escapeHtml(value){return String(value??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+function setMessage(text,ok=false){message.hidden=false;message.textContent=text;message.style.borderColor=ok?'#4f6b2f':'#6b3333';}
+async function request(path,options={}){
+ const response=await fetch(`${API_BASE}${path}`,{...options,headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`,...(options.headers||{})}});
+ const payload=await response.json(); if(response.status===401){sessionStorage.removeItem('wonderos_session_token');location.href='./login.html';throw new Error('Session expired.');}
+ if(!response.ok||!payload.success)throw new Error(payload.error?.message||'The request failed.'); return payload.data;
+}
+function fill(user){current=user;form.elements.uuid.value=user.uuid;form.elements.display_name.value=user.display_name;form.elements.email.value=user.email;form.elements.display_name.readOnly=true;form.elements.email.readOnly=true;form.elements.password.value='';document.querySelector('#password-label').hidden=true;form.elements.role.value=user.role;form.elements.status.value=user.status;document.querySelector('#mode').textContent='Existing account';document.querySelector('#form-title').textContent=user.display_name;document.querySelector('#revoke').hidden=false;loadActivity();loadUsers();}
+function newUser(){current=null;form.reset();form.elements.display_name.readOnly=false;form.elements.email.readOnly=false;document.querySelector('#password-label').hidden=false;form.elements.status.value='active';document.querySelector('#mode').textContent='New account';document.querySelector('#form-title').textContent='Invite a colleague';document.querySelector('#revoke').hidden=true;activity.innerHTML='<p class="muted">Activity begins after the first sign-in.</p>';}
+async function loadUsers(){try{const users=await request('/v1/users');list.innerHTML='';users.forEach(user=>{const button=document.createElement('button');button.className=`account-row${current?.uuid===user.uuid?' active':''}`;button.innerHTML=`<div><strong>${escapeHtml(user.display_name)}</strong><span>${escapeHtml(user.email)}</span></div><div><strong>${escapeHtml(user.role)}</strong><span>${escapeHtml(user.status)}</span></div>`;button.addEventListener('click',()=>fill(user));list.appendChild(button);});if(!users.length)list.innerHTML='<p class="muted">No accounts found.</p>';}catch(error){list.innerHTML=`<p class="form-error">${escapeHtml(error.message)}</p>`;}}
+async function loadActivity(){if(!current)return;activity.innerHTML='<p class="muted">Loading sessions…</p>';try{const rows=await request(`/v1/users/${current.uuid}/activity`);activity.innerHTML=rows.map(row=>`<div class="activity-item"><strong>${row.active?'Active session':'Closed session'}</strong><div class="muted">Created ${escapeHtml(row.created_at)} · Expires ${escapeHtml(row.expires_at)}</div></div>`).join('')||'<p class="muted">No sessions recorded.</p>';}catch(error){activity.textContent=error.message;}}
+form.addEventListener('submit',async event=>{event.preventDefault();try{const data=Object.fromEntries(new FormData(form));let user;if(current){user=await request(`/v1/users/${current.uuid}`,{method:'PUT',body:JSON.stringify({role:data.role,status:data.status})});}else{user=await request('/v1/users',{method:'POST',body:JSON.stringify({display_name:data.display_name,email:data.email,password:data.password,role:data.role})});}fill(user);setMessage(current?'Account updated.':'Account created.',true);}catch(error){setMessage(error.message);}});
+document.querySelector('#revoke').addEventListener('click',async()=>{if(!current)return;try{const result=await request(`/v1/users/${current.uuid}/sessions`,{method:'POST',body:'{}'});setMessage(`${result.revoked_sessions} session(s) revoked.`,true);loadActivity();}catch(error){setMessage(error.message);}});
+document.querySelector('#new-user').addEventListener('click',newUser);
+document.querySelector('#logout').addEventListener('click',async()=>{try{await request('/v1/auth/logout',{method:'POST',body:'{}'});}finally{sessionStorage.removeItem('wonderos_session_token');location.href='./login.html';}});
+if(!token)location.href='./login.html';else{newUser();loadUsers();}
