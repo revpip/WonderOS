@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Claim Review Desk · WonderOS</title>
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./claim-review.css">
+</head>
+<body>
+<div class="review-shell">
+  <aside class="review-queue">
+    <div class="review-brand">Wonder<span>OS</span></div>
+    <div class="queue-head"><div><p class="eyebrow">Editorial governance</p><h1>Claim Review</h1></div><button id="refresh" class="secondary">Refresh</button></div>
+    <div class="queue-filters">
+      <label><input type="checkbox" value="draft" checked> Draft</label>
+      <label><input type="checkbox" value="review" checked> Review</label>
+      <label><input type="checkbox" value="disputed" checked> Disputed</label>
+    </div>
+    <div id="queue" class="queue-list"><p class="muted">Loading review queue…</p></div>
+  </aside>
+
+  <main class="review-main">
+    <header class="review-topbar"><a href="./index.html">Knowledge</a><a href="./lens-studio.html">Lenses</a><a href="./audit.html">Activity</a></header>
+    <section id="empty" class="review-empty"><p class="eyebrow">Evidence-led editing</p><h2>Select a claim to begin review</h2><p>Claims remain separate from canonical entities so evidence, disagreement and changing knowledge can be handled honestly.</p></section>
+    <section id="workspace" hidden>
+      <div class="claim-header card">
+        <div><p id="entity" class="eyebrow"></p><h2 id="claim-id"></h2></div><span id="status" class="status"></span>
+      </div>
+      <div class="review-grid">
+        <section class="card">
+          <h3>Current claim</h3>
+          <textarea id="statement" rows="6"></textarea>
+          <div class="form-row"><label>Type<select id="claim-type"><option>fact</option><option>interpretation</option><option>tradition</option><option>quotation</option><option>measurement</option></select></label><label>Confidence<input id="confidence" type="number" min="0" max="1" step="0.01"></label></div>
+          <label>Editorial note<textarea id="note" rows="3" placeholder="Explain the decision or what needs further work."></textarea></label>
+          <div id="message" class="form-error" hidden></div>
+          <div class="decision-bar">
+            <button data-status="approved" class="primary decision">Approve</button>
+            <button data-status="disputed" class="danger-button decision">Dispute</button>
+            <button data-status="draft" class="secondary decision">Return to research</button>
+            <button id="save" class="secondary">Save revision</button>
+          </div>
+        </section>
+        <aside>
+          <section class="card"><h3>Evidence</h3><div id="evidence" class="stack muted">No evidence loaded.</div></section>
+          <section class="card"><h3>Revision history</h3><div id="history" class="stack muted">No revisions loaded.</div></section>
+        </aside>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="./claim-review.js" defer></script>
+</body>
+</html>
