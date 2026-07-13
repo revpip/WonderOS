@@ -7,6 +7,7 @@ use WonderOS\Api\AuditedEditorialLensStudioApi;
 use WonderOS\Api\AuditedEntityMutationApi;
 use WonderOS\Api\AuthApi;
 use WonderOS\Api\ClaimApi;
+use WonderOS\Api\ClaimCollaborationApi;
 use WonderOS\Api\ClaimReviewApi;
 use WonderOS\Api\ClaimReviewQueueApi;
 use WonderOS\Api\EditorialLensStudioApi;
@@ -16,6 +17,7 @@ use WonderOS\Core\Audit\PdoAuditRepository;
 use WonderOS\Core\Auth\AuthService;
 use WonderOS\Core\Auth\PdoAuthRepository;
 use WonderOS\Knowledge\Graph\GraphTraversal;
+use WonderOS\Knowledge\Infrastructure\Persistence\PdoClaimCollaborationRepository;
 use WonderOS\Knowledge\Infrastructure\Persistence\PdoClaimRepository;
 use WonderOS\Knowledge\Infrastructure\Persistence\PdoEditorialLensRepository;
 use WonderOS\Knowledge\Infrastructure\Persistence\PdoEntityRepository;
@@ -34,7 +36,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') { http_response_code(20
 
 $pdo=new PDO((string)getenv('DATABASE_DSN'),(string)getenv('DATABASE_USER'),(string)getenv('DATABASE_PASSWORD'),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
 $entities=new PdoEntityRepository($pdo); $relationships=new PdoRelationshipRepository($pdo); $relationshipTypes=new PdoRelationshipTypeRepository($pdo);
-$claims=new PdoClaimRepository($pdo); $lenses=new PdoEditorialLensRepository($pdo); $graph=new GraphTraversal($entities,$relationships,$relationshipTypes);
+$claims=new PdoClaimRepository($pdo); $collaboration=new PdoClaimCollaborationRepository($pdo); $lenses=new PdoEditorialLensRepository($pdo); $graph=new GraphTraversal($entities,$relationships,$relationshipTypes);
 $authRepository=new PdoAuthRepository($pdo); $auth=new AuthService($authRepository); $audit=new PdoAuditRepository($pdo);
 $method=$_SERVER['REQUEST_METHOD']??'GET'; $path=parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH)?:'/'; $rawBody=file_get_contents('php://input')?:'';
 $headers=[]; foreach(function_exists('getallheaders')?getallheaders():[] as $name=>$value){$headers[strtolower((string)$name)]=(string)$value;}
@@ -44,6 +46,7 @@ $studioApi = new EditorialLensStudioApi($lenses,$graph,$auth);
 
 $response=(new AuditApi($auth,$audit))->handle($method,$path,$headers,$_GET);
 if($response===null){$response=(new AuthApi($auth,$authRepository,$audit))->handle($method,$path,$rawBody,$headers);}
+if($response===null){$response=(new ClaimCollaborationApi($collaboration,$claims,$auth,$audit))->handle($method,$path,$rawBody,$headers);}
 if($response===null){$response=(new ClaimReviewQueueApi($claims,$auth))->handle($method,$path,$headers,$_GET);}
 if($response===null){$response=(new ClaimReviewApi($claims,$auth,$audit))->handle($method,$path,$rawBody,$headers);}
 if($response===null){$response=(new ClaimApi($claims,$entities,$auth,$audit))->handle($method,$path,$rawBody,$headers);}
