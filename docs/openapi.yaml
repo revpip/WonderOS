@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: WonderOS API
-  version: 0.2.0
+  version: 0.3.0
   description: API-first access to canonical WonderOS knowledge.
 servers:
   - url: http://localhost:8080
@@ -20,10 +20,8 @@ paths:
           description: Ranked canonical entity matches
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/EntitySearchResponse'
-        '422':
-          $ref: '#/components/responses/ValidationError'
+              schema: { $ref: '#/components/schemas/EntitySearchResponse' }
+        '422': { $ref: '#/components/responses/ValidationError' }
     post:
       summary: Create a canonical entity
       operationId: createEntity
@@ -31,44 +29,63 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/CreateEntityRequest'
+            schema: { $ref: '#/components/schemas/CreateEntityRequest' }
       responses:
         '201':
           description: Entity created
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/EntityResponse'
+              schema: { $ref: '#/components/schemas/EntityResponse' }
         '409':
           description: A canonical entity with the same slug already exists
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/DuplicateEntityResponse'
-        '422':
-          $ref: '#/components/responses/ValidationError'
+              schema: { $ref: '#/components/schemas/DuplicateEntityResponse' }
+        '422': { $ref: '#/components/responses/ValidationError' }
   /v1/entities/{wonderId}:
     get:
       summary: Retrieve a canonical entity
       operationId: getEntity
       parameters:
-        - name: wonderId
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: '^WND-[A-Z]{3}-[0-9]{6}$'
+        - $ref: '#/components/parameters/WonderId'
       responses:
         '200':
           description: Entity found
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/EntityResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              schema: { $ref: '#/components/schemas/EntityResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/entities/{wonderId}/graph:
+    get:
+      summary: Traverse the canonical knowledge graph from one entity
+      operationId: traverseEntityGraph
+      parameters:
+        - $ref: '#/components/parameters/WonderId'
+        - name: depth
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 3, default: 1 }
+        - name: max_nodes
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 250, default: 100 }
+      responses:
+        '200':
+          description: Bounded, cycle-safe graph view
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GraphResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
 components:
+  parameters:
+    WonderId:
+      name: wonderId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^WND-[A-Z]{3}-[0-9]{6}$'
   schemas:
     CreateEntityRequest:
       type: object
@@ -91,6 +108,48 @@ components:
         status: { type: string, enum: [draft, review, approved, archived] }
         confidence: { type: number }
         revision: { type: integer, minimum: 1 }
+    GraphNode:
+      type: object
+      required: [wonder_id, canonical_name, slug, family, type, status, confidence, distance]
+      properties:
+        wonder_id: { type: string }
+        canonical_name: { type: string }
+        slug: { type: string }
+        family: { type: string }
+        type: { type: string }
+        status: { type: string }
+        confidence: { type: number }
+        distance: { type: integer, minimum: 0, maximum: 3 }
+    GraphEdge:
+      type: object
+      required: [uuid, from_wonder_id, to_wonder_id, direction, type, label, canonical_type, source_wonder_id, target_wonder_id, confidence, status, distance]
+      properties:
+        uuid: { type: string, format: uuid }
+        from_wonder_id: { type: string }
+        to_wonder_id: { type: string }
+        direction: { type: string, enum: [outgoing, incoming] }
+        type: { type: string }
+        label: { type: string }
+        canonical_type: { type: string }
+        source_wonder_id: { type: string }
+        target_wonder_id: { type: string }
+        context: { type: [string, 'null'] }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        status: { type: string }
+        distance: { type: integer, minimum: 1, maximum: 3 }
+    Graph:
+      type: object
+      required: [root_wonder_id, depth, nodes, edges, truncated]
+      properties:
+        root_wonder_id: { type: string }
+        depth: { type: integer, minimum: 1, maximum: 3 }
+        nodes:
+          type: array
+          items: { $ref: '#/components/schemas/GraphNode' }
+        edges:
+          type: array
+          items: { $ref: '#/components/schemas/GraphEdge' }
+        truncated: { type: boolean }
     EntityResponse:
       type: object
       required: [success, data, meta, links]
@@ -113,6 +172,19 @@ components:
           properties:
             count: { type: integer, minimum: 0 }
             query: { type: string }
+        links: { type: object }
+    GraphResponse:
+      type: object
+      required: [success, data, meta, links]
+      properties:
+        success: { type: boolean, const: true }
+        data: { $ref: '#/components/schemas/Graph' }
+        meta:
+          type: object
+          required: [node_count, edge_count]
+          properties:
+            node_count: { type: integer, minimum: 1 }
+            edge_count: { type: integer, minimum: 0 }
         links: { type: object }
     DuplicateEntityResponse:
       type: object
