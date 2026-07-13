@@ -7,8 +7,10 @@ use WonderOS\Api\AuthApi;
 use WonderOS\Api\EditorialLensStudioApi;
 use WonderOS\Api\EntityApi;
 use WonderOS\Api\GraphApi;
+use WonderOS\Api\InvitationApi;
 use WonderOS\Core\Auth\AuthService;
 use WonderOS\Core\Auth\PdoAuthRepository;
+use WonderOS\Core\Auth\PdoInvitationRepository;
 use WonderOS\Knowledge\Graph\GraphTraversal;
 use WonderOS\Knowledge\Infrastructure\Persistence\PdoEditorialLensRepository;
 use WonderOS\Knowledge\Infrastructure\Persistence\PdoEntityRepository;
@@ -22,10 +24,11 @@ if(($_SERVER['HTTP_ORIGIN']??'')===$allowedOrigin){header('Access-Control-Allow-
 if(($_SERVER['REQUEST_METHOD']??'GET')==='OPTIONS'){http_response_code(204);exit;}
 $pdo=new PDO((string)getenv('DATABASE_DSN'),(string)getenv('DATABASE_USER'),(string)getenv('DATABASE_PASSWORD'),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
 $entities=new PdoEntityRepository($pdo);$relationships=new PdoRelationshipRepository($pdo);$relationshipTypes=new PdoRelationshipTypeRepository($pdo);$lenses=new PdoEditorialLensRepository($pdo);$graph=new GraphTraversal($entities,$relationships,$relationshipTypes);
-$authRepository=new PdoAuthRepository($pdo);$auth=new AuthService($authRepository);
+$authRepository=new PdoAuthRepository($pdo);$auth=new AuthService($authRepository);$invitationRepository=new PdoInvitationRepository($pdo);
 $method=$_SERVER['REQUEST_METHOD']??'GET';$path=parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH)?:'/';$rawBody=file_get_contents('php://input')?:'';
 $headers=[];foreach(function_exists('getallheaders')?getallheaders():[] as $name=>$value){$headers[strtolower((string)$name)]=(string)$value;}
-$response=(new AccountAdminApi($auth,$authRepository))->handle($method,$path,$rawBody,$headers);
+$response=(new InvitationApi($auth,$invitationRepository))->handle($method,$path,$rawBody,$headers);
+if($response===null)$response=(new AccountAdminApi($auth,$authRepository))->handle($method,$path,$rawBody,$headers);
 if($response===null)$response=(new AuthApi($auth,$authRepository))->handle($method,$path,$rawBody,$headers);
 if($response===null && !($method==='GET'&&$path==='/v1/editorial-lenses'))$response=(new EditorialLensStudioApi($lenses,$graph,$auth))->handle($method,$path,$rawBody,$headers);
 if($response===null)$response=(new GraphApi($graph,$lenses))->handle($method,$path,$_GET);
