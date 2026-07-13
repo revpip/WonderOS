@@ -6,6 +6,7 @@ namespace WonderOS\Api;
 use DomainException;
 use JsonException;
 use Throwable;
+use WonderOS\Core\Audit\AuditRepository;
 use WonderOS\Core\Auth\AuthRepository;
 use WonderOS\Core\Auth\AuthService;
 use WonderOS\Core\Auth\Role;
@@ -13,7 +14,7 @@ use WonderOS\Core\Auth\User;
 
 final readonly class AuthApi
 {
-    public function __construct(private AuthService $auth,private AuthRepository $repository) {}
+    public function __construct(private AuthService $auth,private AuthRepository $repository,private AuditRepository $audit) {}
 
     public function handle(string $method,string $path,string $rawBody,array $headers): ?array
     {
@@ -21,26 +22,38 @@ final readonly class AuthApi
         try {
             if($method==='POST'&&$path==='/v1/auth/login'){
                 $payload=$this->decode($rawBody); $result=$this->auth->login((string)($payload['email']??''),(string)($payload['password']??''));
+                $this->audit->record($result['user'],'auth.login','user',$result['user']->uuid,'User signed in.');
                 return $this->success(200,['token'=>$result['token'],'expires_at'=>$result['expires_at'],'user'=>$this->user($result['user'])]);
             }
             $current=$this->auth->authenticate($headers['authorization']??null);
-            if($method==='POST'&&$path==='/v1/auth/logout'){ $this->auth->logout($headers['authorization']??null); return $this->success(200,['logged_out'=>true]); }
+            if($method==='POST'&&$path==='/v1/auth/logout'){
+                $this->auth->logout($headers['authorization']??null); $this->audit->record($current,'auth.logout','user',$current->uuid,'User signed out.');
+                return $this->success(200,['logged_out'=>true]);
+            }
             if($method==='GET'&&$path==='/v1/auth/me') return $this->success(200,$this->user($current));
             if($method==='GET'&&$path==='/v1/users'){ $current->role->assertPermits('users.manage'); return $this->success(200,array_map(fn(User $user):array=>$this->user($user),$this->repository->users())); }
             if($method==='POST'&&$path==='/v1/users'){
                 $current->role->assertPermits('users.manage'); $payload=$this->decode($rawBody); $password=(string)($payload['password']??'');
                 if(strlen($password)<12) throw new DomainException('Passwords must contain at least 12 characters.');
                 $user=new User($this->uuid(),strtolower(trim((string)($payload['email']??''))),trim((string)($payload['display_name']??'')),Role::from((string)($payload['role']??'viewer')));
-                $this->repository->createUser($user,password_hash($password,PASSWORD_DEFAULT)); return $this->success(201,$this->user($user));
+                $this->repository->createUser($user,password_hash($password,PASSWORD_DEFAULT));
+                $this->audit->record($current,'user.created','user',$user->uuid,'User account created.',['email'=>$user->email,'role'=>$user->role->value]);
+                return $this->success(201,$this->user($user));
             }
             if(preg_match('#^/v1/users/([0-9a-f-]{36})(?:/(sessions|activity))?$#i',$path,$matches)){
                 $current->role->assertPermits('users.manage'); $uuid=$matches[1]; $action=$matches[2]??null;
                 if($method==='PUT'&&$action===null){
                     $payload=$this->decode($rawBody); $role=Role::from((string)($payload['role']??'')); $status=(string)($payload['status']??'');
                     if($uuid===$current->uuid&&$status==='suspended') throw new DomainException('Administrators cannot suspend their own active account.');
-                    return $this->success(200,$this->user($this->repository->updateUser($uuid,$role,$status)));
+                    $updated=$this->repository->updateUser($uuid,$role,$status);
+                    $this->audit->record($current,'user.updated','user',$uuid,'User role or status changed.',['role'=>$role->value,'status'=>$status]);
+                    return $this->success(200,$this->user($updated));
                 }
-                if($method==='POST'&&$action==='sessions') return $this->success(200,['revoked_sessions'=>$this->repository->revokeUserSessions($uuid)]);
+                if($method==='POST'&&$action==='sessions'){
+                    $count=$this->repository->revokeUserSessions($uuid);
+                    $this->audit->record($current,'user.sessions_revoked','user',$uuid,'All user sessions were revoked.',['revoked_sessions'=>$count]);
+                    return $this->success(200,['revoked_sessions'=>$count]);
+                }
                 if($method==='GET'&&$action==='activity') return $this->success(200,$this->repository->accountActivity($uuid));
             }
             return $this->error(405,'METHOD_NOT_ALLOWED','The account method is not supported.');
