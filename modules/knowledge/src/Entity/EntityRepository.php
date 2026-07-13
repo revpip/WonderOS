@@ -10,15 +10,16 @@ use WonderOS\Core\Identity\WonderId;
 interface EntityRepository
 {
     public function nextIdentity(): WonderId;
-
     public function save(Entity $entity, ?int $expectedRevision = null): void;
-
     public function get(WonderId $id): Entity;
-
     public function find(WonderId $id): ?Entity;
 
     /** @return list<Entity> */
     public function search(string $query, int $limit = 10): array;
 
     public function findBySlug(string $slug): ?Entity;
+    public function addAlias(EntityAlias $alias): void;
+
+    /** @return list<EntityAlias> */
+    public function aliases(WonderId $entityId): array;
 }
