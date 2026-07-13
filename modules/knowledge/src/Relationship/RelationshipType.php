@@ -30,4 +30,14 @@ final readonly class RelationshipType
             throw new DomainException('Relationship type status is invalid.');
         }
     }
+
+    public function presentationType(bool $outgoing): string
+    {
+        return $outgoing || $this->symmetric ? $this->type : $this->inverseType;
+    }
+
+    public function presentationLabel(bool $outgoing): string
+    {
+        return $outgoing || $this->symmetric ? $this->label : $this->inverseLabel;
+    }
 }
