@@ -14,10 +14,15 @@ use WonderOS\Knowledge\Entity\EntityAlias;
 use WonderOS\Knowledge\Entity\EntityAliasType;
 use WonderOS\Knowledge\Entity\EntityNotFound;
 use WonderOS\Knowledge\Entity\EntityRepository;
+use WonderOS\Knowledge\Relationship\Relationship;
+use WonderOS\Knowledge\Relationship\RelationshipRepository;
 
 final readonly class EntityApi
 {
-    public function __construct(private EntityRepository $entities) {}
+    public function __construct(
+        private EntityRepository $entities,
+        private ?RelationshipRepository $relationships = null,
+    ) {}
 
     public function handle(string $method, string $path, string $rawBody = '', array $query = []): array
     {
@@ -26,6 +31,9 @@ final readonly class EntityApi
             if ($method === 'GET' && $path === '/v1/entities') return $this->search($query);
             if (preg_match('#^/v1/entities/(WND-[A-Z]{3}-\d{6})/aliases$#i', $path, $matches)) {
                 return $method === 'POST' ? $this->addAlias($matches[1], $this->decode($rawBody)) : ($method === 'GET' ? $this->listAliases($matches[1]) : $this->error(405,'METHOD_NOT_ALLOWED','The method is not supported.'));
+            }
+            if (preg_match('#^/v1/entities/(WND-[A-Z]{3}-\d{6})/relationships$#i', $path, $matches)) {
+                return $method === 'POST' ? $this->addRelationship($matches[1], $this->decode($rawBody)) : ($method === 'GET' ? $this->listRelationships($matches[1]) : $this->error(405,'METHOD_NOT_ALLOWED','The method is not supported.'));
             }
             if ($method === 'GET' && preg_match('#^/v1/entities/(WND-[A-Z]{3}-\d{6})$#i', $path, $matches)) return $this->show($matches[1]);
             return $this->error(404, 'ROUTE_NOT_FOUND', 'The requested API route does not exist.');
@@ -61,6 +69,7 @@ final readonly class EntityApi
         $id = WonderId::parse($wonderId);
         $data = $this->serialize($this->entities->get($id));
         $data['aliases'] = array_map(fn(EntityAlias $alias): array => $this->serializeAlias($alias), $this->entities->aliases($id));
+        if ($this->relationships !== null) $data['relationships'] = array_map(fn(Relationship $relationship): array => $this->serializeRelationship($relationship), $this->relationships->forEntity($id));
         return ['status'=>200,'body'=>$this->success($data)];
     }
 
@@ -80,23 +89,32 @@ final readonly class EntityApi
         return ['status'=>200,'body'=>['success'=>true,'data'=>$aliases,'meta'=>['count'=>count($aliases)],'links'=>(object)[]]];
     }
 
-    private function decode(string $rawBody): array
+    private function addRelationship(string $sourceId, array $payload): array
     {
-        $decoded = json_decode($rawBody,true,512,JSON_THROW_ON_ERROR);
-        if (!is_array($decoded)) throw new InvalidArgumentException('Request body must be a JSON object.');
-        return $decoded;
+        $repository = $this->relationships ?? throw new DomainException('Relationship storage is unavailable.');
+        foreach (['target_wonder_id','type'] as $required) if (!isset($payload[$required]) || !is_string($payload[$required]) || trim($payload[$required]) === '') throw new InvalidArgumentException(sprintf('%s is required.', $required));
+        $source = WonderId::parse($sourceId);
+        $target = WonderId::parse($payload['target_wonder_id']);
+        $this->entities->get($source);
+        $this->entities->get($target);
+        $relationship = Relationship::create($source,$target,$payload['type'],isset($payload['context'])&&is_string($payload['context'])?$payload['context']:null,isset($payload['confidence'])?(float)$payload['confidence']:0.5);
+        $repository->save($relationship);
+        return ['status'=>201,'body'=>$this->success($this->serializeRelationship($relationship))];
     }
 
-    private function serialize(Entity $entity): array
+    private function listRelationships(string $wonderId): array
     {
-        return ['wonder_id'=>(string)$entity->id(),'canonical_name'=>$entity->canonicalName(),'slug'=>$entity->slug(),'family'=>$entity->family(),'type'=>$entity->type(),'status'=>$entity->status()->value,'confidence'=>$entity->confidence(),'revision'=>$entity->revision()];
+        $repository = $this->relationships ?? throw new DomainException('Relationship storage is unavailable.');
+        $id = WonderId::parse($wonderId);
+        $this->entities->get($id);
+        $items = array_map(fn(Relationship $relationship): array => $this->serializeRelationship($relationship),$repository->forEntity($id));
+        return ['status'=>200,'body'=>['success'=>true,'data'=>$items,'meta'=>['count'=>count($items)],'links'=>(object)[]]];
     }
 
-    private function serializeAlias(EntityAlias $alias): array
-    {
-        return ['alias'=>$alias->alias,'type'=>$alias->type->value,'language'=>$alias->language];
-    }
-
+    private function decode(string $rawBody): array { $decoded=json_decode($rawBody,true,512,JSON_THROW_ON_ERROR); if(!is_array($decoded)) throw new InvalidArgumentException('Request body must be a JSON object.'); return $decoded; }
+    private function serialize(Entity $entity): array { return ['wonder_id'=>(string)$entity->id(),'canonical_name'=>$entity->canonicalName(),'slug'=>$entity->slug(),'family'=>$entity->family(),'type'=>$entity->type(),'status'=>$entity->status()->value,'confidence'=>$entity->confidence(),'revision'=>$entity->revision()]; }
+    private function serializeAlias(EntityAlias $alias): array { return ['alias'=>$alias->alias,'type'=>$alias->type->value,'language'=>$alias->language]; }
+    private function serializeRelationship(Relationship $relationship): array { return ['uuid'=>$relationship->uuid(),'source_wonder_id'=>(string)$relationship->sourceId(),'target_wonder_id'=>(string)$relationship->targetId(),'type'=>$relationship->type(),'context'=>$relationship->context(),'confidence'=>$relationship->confidence(),'status'=>$relationship->status()]; }
     private function success(array $data): array { return ['success'=>true,'data'=>$data,'meta'=>(object)[],'links'=>(object)[]]; }
     private function error(int $status,string $code,string $message): array { return ['status'=>$status,'body'=>['success'=>false,'error'=>['code'=>$code,'message'=>$message]]]; }
     private function slugify(string $value): string { $value=strtolower(trim($value)); $value=preg_replace('/[^a-z0-9]+/','-',$value)??''; return trim($value,'-'); }
