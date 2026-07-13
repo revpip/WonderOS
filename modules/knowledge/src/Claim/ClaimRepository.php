@@ -17,4 +17,9 @@ interface ClaimRepository
     /** @return list<array<string,mixed>> */
     public function evidenceForClaim(string $claimWonderId): array;
     public function source(string $sourceWonderId): ?array;
+    public function claim(string $claimWonderId): ?array;
+    /** @param array<string,mixed> $changes */
+    public function reviseClaim(string $claimWonderId, array $changes, int $expectedRevision, string $changedBy, ?string $changeNote): array;
+    /** @return list<array<string,mixed>> */
+    public function claimHistory(string $claimWonderId): array;
 }

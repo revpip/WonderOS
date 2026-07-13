@@ -69,4 +69,47 @@ final readonly class PdoClaimRepository implements ClaimRepository
         $row=$statement->fetch(PDO::FETCH_ASSOC);
         return $row===false?null:$row;
     }
+
+    public function claim(string $claimWonderId): ?array
+    {
+        $statement=$this->connection->prepare('SELECT * FROM wonder_claims WHERE wonder_id=:id');
+        $statement->execute(['id'=>$claimWonderId]);
+        $row=$statement->fetch(PDO::FETCH_ASSOC);
+        return $row===false?null:$row;
+    }
+
+    public function reviseClaim(string $claimWonderId,array $changes,int $expectedRevision,string $changedBy,?string $changeNote): array
+    {
+        $this->connection->beginTransaction();
+        try {
+            $current=$this->claim($claimWonderId);
+            if($current===null) throw new \DomainException('The claim does not exist.');
+            if((int)$current['revision']!==$expectedRevision) throw new \DomainException('The claim changed after it was opened. Reload before saving.');
+            $next=$expectedRevision+1;
+            $statement=$this->connection->prepare('UPDATE wonder_claims SET statement=:statement,claim_type=:claim_type,confidence=:confidence,status=:status,revision=:next_revision,reviewed_by=:reviewed_by,reviewed_at=CASE WHEN :status IN (\'approved\',\'disputed\',\'archived\') THEN NOW() ELSE reviewed_at END,updated_at=NOW() WHERE wonder_id=:id AND revision=:expected RETURNING *');
+            $statement->execute([
+                'statement'=>$changes['statement']??$current['statement'],
+                'claim_type'=>$changes['claim_type']??$current['claim_type'],
+                'confidence'=>$changes['confidence']??$current['confidence'],
+                'status'=>$changes['status']??$current['status'],
+                'next_revision'=>$next,'reviewed_by'=>$changedBy,'id'=>$claimWonderId,'expected'=>$expectedRevision,
+            ]);
+            $updated=$statement->fetch(PDO::FETCH_ASSOC);
+            if($updated===false) throw new \DomainException('The claim revision conflicted with another edit.');
+            $history=$this->connection->prepare('INSERT INTO wonder_claim_revisions (claim_wonder_id,revision,statement,claim_type,confidence,status,changed_by,change_note) VALUES (:claim,:revision,:statement,:claim_type,:confidence,:status,:changed_by,:change_note)');
+            $history->execute(['claim'=>$claimWonderId,'revision'=>$next,'statement'=>$updated['statement'],'claim_type'=>$updated['claim_type'],'confidence'=>$updated['confidence'],'status'=>$updated['status'],'changed_by'=>$changedBy,'change_note'=>$changeNote]);
+            $this->connection->commit();
+            return $updated;
+        } catch (\Throwable $exception) {
+            if($this->connection->inTransaction()) $this->connection->rollBack();
+            throw $exception;
+        }
+    }
+
+    public function claimHistory(string $claimWonderId): array
+    {
+        $statement=$this->connection->prepare('SELECT r.*,u.email AS changed_by_email,u.display_name AS changed_by_name FROM wonder_claim_revisions r JOIN wonder_users u ON u.uuid=r.changed_by WHERE r.claim_wonder_id=:claim ORDER BY r.revision DESC');
+        $statement->execute(['claim'=>$claimWonderId]);
+        return $statement->fetchAll(PDO::FETCH_ASSOC);
+    }
 }
