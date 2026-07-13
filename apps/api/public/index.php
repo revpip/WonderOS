@@ -8,6 +8,7 @@ use WonderOS\Api\AuditedEntityMutationApi;
 use WonderOS\Api\AuthApi;
 use WonderOS\Api\ClaimApi;
 use WonderOS\Api\ClaimReviewApi;
+use WonderOS\Api\ClaimReviewQueueApi;
 use WonderOS\Api\EditorialLensStudioApi;
 use WonderOS\Api\EntityApi;
 use WonderOS\Api\GraphApi;
@@ -43,6 +44,7 @@ $studioApi = new EditorialLensStudioApi($lenses,$graph,$auth);
 
 $response=(new AuditApi($auth,$audit))->handle($method,$path,$headers,$_GET);
 if($response===null){$response=(new AuthApi($auth,$authRepository,$audit))->handle($method,$path,$rawBody,$headers);}
+if($response===null){$response=(new ClaimReviewQueueApi($claims,$auth))->handle($method,$path,$headers,$_GET);}
 if($response===null){$response=(new ClaimReviewApi($claims,$auth,$audit))->handle($method,$path,$rawBody,$headers);}
 if($response===null){$response=(new ClaimApi($claims,$entities,$auth,$audit))->handle($method,$path,$rawBody,$headers);}
 if($response===null){$response=(new AuditedEntityMutationApi($entityApi,$auth,$audit))->handle($method,$path,$rawBody,$headers,$_GET);}
