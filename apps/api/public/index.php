@@ -6,6 +6,7 @@ use PDO;
 use WonderOS\Api\EntityApi;
 use WonderOS\Api\GraphApi;
 use WonderOS\Knowledge\Graph\GraphTraversal;
+use WonderOS\Knowledge\Infrastructure\Persistence\PdoEditorialLensRepository;
 use WonderOS\Knowledge\Infrastructure\Persistence\PdoEntityRepository;
 use WonderOS\Knowledge\Infrastructure\Persistence\PdoRelationshipRepository;
 use WonderOS\Knowledge\Infrastructure\Persistence\PdoRelationshipTypeRepository;
@@ -34,20 +35,16 @@ $pdo = new PDO((string) getenv('DATABASE_DSN'), (string) getenv('DATABASE_USER')
 $entities = new PdoEntityRepository($pdo);
 $relationships = new PdoRelationshipRepository($pdo);
 $relationshipTypes = new PdoRelationshipTypeRepository($pdo);
+$lenses = new PdoEditorialLensRepository($pdo);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 
-$graphApi = new GraphApi(new GraphTraversal($entities, $relationships, $relationshipTypes));
+$graphApi = new GraphApi(new GraphTraversal($entities, $relationships, $relationshipTypes), $lenses);
 $response = $graphApi->handle($method, $path, $_GET);
 
 if ($response === null) {
     $entityApi = new EntityApi($entities, $relationships, $relationshipTypes);
-    $response = $entityApi->handle(
-        $method,
-        $path,
-        file_get_contents('php://input') ?: '',
-        $_GET,
-    );
+    $response = $entityApi->handle($method, $path, file_get_contents('php://input') ?: '', $_GET);
 }
 
 http_response_code($response['status']);
