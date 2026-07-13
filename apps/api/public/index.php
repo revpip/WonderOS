@@ -1,8 +1,8 @@
 <?php
 
 declare(strict_types=1);
-
 use PDO;
+use WonderOS\Api\EditorialLensStudioApi;
 use WonderOS\Api\EntityApi;
 use WonderOS\Api\GraphApi;
 use WonderOS\Knowledge\Graph\GraphTraversal;
@@ -19,8 +19,8 @@ $allowedOrigin = getenv('CONSOLE_ORIGIN') ?: 'http://localhost:8081';
 if (($_SERVER['HTTP_ORIGIN'] ?? '') === $allowedOrigin) {
     header('Access-Control-Allow-Origin: ' . $allowedOrigin);
     header('Vary: Origin');
-    header('Access-Control-Allow-Headers: Content-Type');
-    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, X-WonderOS-Editor-Key, X-WonderOS-Editor');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
@@ -36,15 +36,26 @@ $entities = new PdoEntityRepository($pdo);
 $relationships = new PdoRelationshipRepository($pdo);
 $relationshipTypes = new PdoRelationshipTypeRepository($pdo);
 $lenses = new PdoEditorialLensRepository($pdo);
+$graph = new GraphTraversal($entities, $relationships, $relationshipTypes);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+$rawBody = file_get_contents('php://input') ?: '';
+$headers = [];
+foreach (function_exists('getallheaders') ? getallheaders() : [] as $name => $value) {
+    $headers[strtolower((string)$name)] = (string)$value;
+}
 
-$graphApi = new GraphApi(new GraphTraversal($entities, $relationships, $relationshipTypes), $lenses);
-$response = $graphApi->handle($method, $path, $_GET);
+$studioApi = new EditorialLensStudioApi($lenses, $graph, (string)getenv('EDITORIAL_API_KEY'));
+$response = $studioApi->handle($method, $path, $rawBody, $headers);
 
 if ($response === null) {
-    $entityApi = new EntityApi($entities, $relationships, $relationshipTypes);
-    $response = $entityApi->handle($method, $path, file_get_contents('php://input') ?: '', $_GET);
+    $graphApi = new GraphApi($graph, $lenses);
+    $response = $graphApi->handle($method, $path, $_GET);
+}
+
+if ($response === null) {
+    $entityApi = new EntityApi($entities, $relationships, $relationshipTypes, $lenses);
+    $response = $entityApi->handle($method, $path, $rawBody, $_GET);
 }
 
 http_response_code($response['status']);
