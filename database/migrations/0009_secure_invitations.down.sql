@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS wonder_user_invitations;

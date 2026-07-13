@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en-GB">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Join WonderOS</title><link rel="stylesheet" href="./styles.css"></head>
+<body>
+<main class="workspace" style="max-width:620px;margin:0 auto;padding-top:10vh">
+  <section class="card">
+    <p class="eyebrow">WonderOS invitation</p>
+    <h1 style="font-size:42px;line-height:1.05">Create your account.</h1>
+    <p class="muted">Choose a private password. The invitation can be used only once and expires automatically.</p>
+    <form id="accept-form">
+      <label>New password<input name="password" type="password" minlength="12" autocomplete="new-password" required></label>
+      <label>Confirm password<input name="confirmation" type="password" minlength="12" autocomplete="new-password" required></label>
+      <div id="message" class="form-error" hidden></div>
+      <div class="dialog-actions"><button class="primary" type="submit">Create account</button></div>
+    </form>
+  </section>
+</main>
+<script src="./accept-invitation.js" defer></script>
+</body></html>
