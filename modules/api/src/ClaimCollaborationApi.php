@@ -7,12 +7,13 @@ use DomainException;
 use Throwable;
 use WonderOS\Core\Audit\AuditRepository;
 use WonderOS\Core\Auth\AuthService;
+use WonderOS\Core\Notification\NotificationRepository;
 use WonderOS\Knowledge\Claim\ClaimCollaborationRepository;
 use WonderOS\Knowledge\Claim\ClaimRepository;
 
 final readonly class ClaimCollaborationApi
 {
-    public function __construct(private ClaimCollaborationRepository $collaboration,private ClaimRepository $claims,private AuthService $auth,private AuditRepository $audit) {}
+    public function __construct(private ClaimCollaborationRepository $collaboration,private ClaimRepository $claims,private AuthService $auth,private AuditRepository $audit,private NotificationRepository $notifications) {}
 
     public function handle(string $method,string $path,string $rawBody,array $headers): ?array
     {
@@ -27,11 +28,14 @@ final readonly class ClaimCollaborationApi
             if($method==='POST'&&($m[2]??'')==='assignments'){
                 $user->role->assertPermits('editorial.manage');
                 $row=$this->collaboration->assign(['uuid'=>$this->uuid(),'claim_wonder_id'=>$m[1],'assignee_uuid'=>(string)($payload['assignee_uuid']??''),'assigned_by'=>$user->uuid,'assignment_type'=>(string)($payload['assignment_type']??'research'),'due_at'=>$payload['due_at']??null]);
+                $this->notifications->create(['uuid'=>$this->uuid(),'recipient_uuid'=>$row['assignee_uuid'],'actor_uuid'=>$user->uuid,'notification_type'=>'assignment','title'=>'New claim assignment','body'=>'You have been assigned '.$row['assignment_type'].' work for '.$m[1].'.','subject_type'=>'claim','subject_id'=>$m[1],'action_url'=>'./claim-collaboration.html?claim='.$m[1],'deduplication_key'=>'assignment:'.$row['uuid']]);
                 $this->audit->record($user,'claim.assigned','claim',$m[1],'Assigned claim '.$m[1].'.',['assignment_uuid'=>$row['uuid'],'assignee_uuid'=>$row['assignee_uuid'],'assignment_type'=>$row['assignment_type'],'due_at'=>$row['due_at']]); return $this->created($row);
             }
             if($method==='POST'&&($m[2]??'')==='comments'){
                 $user->role->assertPermits('knowledge.contribute'); $body=trim((string)($payload['body']??'')); if($body==='') throw new DomainException('Comment body is required.');
-                $row=$this->collaboration->comment(['uuid'=>$this->uuid(),'claim_wonder_id'=>$m[1],'author_uuid'=>$user->uuid,'parent_uuid'=>$payload['parent_uuid']??null,'body'=>$body,'mentions'=>$payload['mentions']??[]]);
+                $mentions=array_values(array_unique(array_filter($payload['mentions']??[],fn($id)=>is_string($id)&&$id!==$user->uuid)));
+                $row=$this->collaboration->comment(['uuid'=>$this->uuid(),'claim_wonder_id'=>$m[1],'author_uuid'=>$user->uuid,'parent_uuid'=>$payload['parent_uuid']??null,'body'=>$body,'mentions'=>$mentions]);
+                foreach($mentions as $recipient){$this->notifications->create(['uuid'=>$this->uuid(),'recipient_uuid'=>$recipient,'actor_uuid'=>$user->uuid,'notification_type'=>'mention','title'=>'You were mentioned','body'=>$user->displayName.' mentioned you in a discussion about '.$m[1].'.','subject_type'=>'claim','subject_id'=>$m[1],'action_url'=>'./claim-collaboration.html?claim='.$m[1],'deduplication_key'=>'mention:'.$row['uuid'].':'.$recipient]);}
                 $this->audit->record($user,'claim.comment_added','claim',$m[1],'Added editorial discussion to '.$m[1].'.',['comment_uuid'=>$row['uuid'],'parent_uuid'=>$row['parent_uuid']]); return $this->created($row);
             }
             if($method==='PUT'&&isset($a[1])){
