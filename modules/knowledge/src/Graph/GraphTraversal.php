@@ -47,27 +47,26 @@ final readonly class GraphTraversal
             }
 
             foreach ($this->relationships->forEntity($currentId) as $relationship) {
+                $relatedId = $relationship->relatedEntityIdFor($currentId);
+                $relatedKey = (string) $relatedId;
+
+                if (!isset($visited[$relatedKey])) {
+                    if (count($nodes) >= $maxNodes) {
+                        $truncated = true;
+                        continue;
+                    }
+
+                    $related = $this->entities->get($relatedId);
+                    $visited[$relatedKey] = true;
+                    $nodes[$relatedKey] = $this->node($related, $currentDepth + 1);
+                    $queue[] = [$relatedId, $currentDepth + 1];
+                }
+
                 $edgeKey = $relationship->uuid();
                 if (!isset($seenEdges[$edgeKey])) {
                     $edges[] = $this->edge($relationship, $currentId, $currentDepth + 1);
                     $seenEdges[$edgeKey] = true;
                 }
-
-                $relatedId = $relationship->relatedEntityIdFor($currentId);
-                $relatedKey = (string) $relatedId;
-                if (isset($visited[$relatedKey])) {
-                    continue;
-                }
-
-                if (count($nodes) >= $maxNodes) {
-                    $truncated = true;
-                    continue 2;
-                }
-
-                $related = $this->entities->get($relatedId);
-                $visited[$relatedKey] = true;
-                $nodes[$relatedKey] = $this->node($related, $currentDepth + 1);
-                $queue[] = [$relatedId, $currentDepth + 1];
             }
         }
 
