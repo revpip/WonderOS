@@ -14,6 +14,7 @@ use WonderOS\Api\EditorialLensStudioApi;
 use WonderOS\Api\EntityApi;
 use WonderOS\Api\GraphApi;
 use WonderOS\Api\NotificationApi;
+use WonderOS\Api\NotificationPreferencesApi;
 use WonderOS\Core\Audit\PdoAuditRepository;
 use WonderOS\Core\Auth\AuthService;
 use WonderOS\Core\Auth\PdoAuthRepository;
@@ -48,6 +49,7 @@ $studioApi = new EditorialLensStudioApi($lenses,$graph,$auth);
 
 $response=(new AuditApi($auth,$audit))->handle($method,$path,$headers,$_GET);
 if($response===null){$response=(new AuthApi($auth,$authRepository,$audit))->handle($method,$path,$rawBody,$headers);}
+if($response===null){$response=(new NotificationPreferencesApi($pdo,$auth))->handle($method,$path,$rawBody,$headers);}
 if($response===null){$response=(new NotificationApi($notifications,$auth))->handle($method,$path,$headers,$_GET);}
 if($response===null){$response=(new ClaimCollaborationApi($collaboration,$claims,$auth,$audit,$notifications))->handle($method,$path,$rawBody,$headers);}
 if($response===null){$response=(new ClaimReviewQueueApi($claims,$auth))->handle($method,$path,$headers,$_GET);}
