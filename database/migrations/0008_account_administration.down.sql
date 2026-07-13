@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS wonder_account_activity;
