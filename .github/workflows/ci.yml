@@ -60,6 +60,15 @@ jobs:
       - name: Validate migrations
         run: bash tools/validate-migrations.sh
 
+      - name: Upload migration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-diagnostics
+          path: artifacts/migrations
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Run test suite
         run: composer test
 
