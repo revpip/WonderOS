@@ -12,20 +12,25 @@ fi
 
 apply_migration() {
   local file="$1"
-  local log_file
+  local log_file status
   log_file="$(mktemp)"
 
   echo "::group::Applying $file"
-  if ! "${PSQL[@]}" -f "$file" >"$log_file" 2>&1; then
-    local status=$?
+  set +e
+  "${PSQL[@]}" -f "$file" >"$log_file" 2>&1
+  status=$?
+  set -e
+
+  if [[ $status -ne 0 ]]; then
     cat "$log_file" >&2
-    echo "::error file=$file::Migration failed: $file" >&2
+    echo "::error file=$file::Migration failed with psql exit code $status: $file" >&2
     echo "Last 80 lines from PostgreSQL:" >&2
     tail -n 80 "$log_file" >&2
     rm -f "$log_file"
     echo "::endgroup::"
-    exit "${status:-1}"
+    exit "$status"
   fi
+
   cat "$log_file"
   rm -f "$log_file"
   echo "::endgroup::"
