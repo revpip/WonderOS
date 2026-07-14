@@ -1,0 +1,112 @@
+name: WonderOS CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wonderos-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: wonderos
+          POSTGRES_USER: wonderos
+          POSTGRES_PASSWORD: wonderos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wonderos -d wonderos"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_DSN: postgresql://wonderos:wonderos@127.0.0.1:5432/wonderos
+      DATABASE_USER: wonderos
+      DATABASE_PASSWORD: wonderos
+      WONDEROS_TEST_DATABASE_DSN: pgsql:host=127.0.0.1;port=5432;dbname=wonderos
+      WONDEROS_TEST_DATABASE_USER: wonderos
+      WONDEROS_TEST_DATABASE_PASSWORD: wonderos
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_pgsql, curl
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Lint PHP
+        run: find apps modules tests tools -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Validate migrations
+        run: bash tools/validate-migrations.sh
+
+      - name: Upload migration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-diagnostics
+          path: artifacts/migrations
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Run test suite
+        run: composer test
+
+      - name: Validate OpenAPI contract
+        shell: bash
+        run: |
+          mapfile -t specs < <(find . -type f \( -iname '*openapi*.yaml' -o -iname '*openapi*.yml' -o -iname '*openapi*.json' \))
+          if [[ ${#specs[@]} -eq 0 ]]; then
+            echo 'No OpenAPI document found.' >&2
+            exit 1
+          fi
+          for spec in "${specs[@]}"; do
+            npx --yes @redocly/cli@1 lint "$spec"
+          done
+
+      - name: Check worker entry points
+        run: |
+          php -l tools/run-notification-worker.php
+          php -l tools/run-notification-delivery-worker.php
+          php -l tools/run-notification-digest-worker.php
+
+  resend-smoke:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production-email-smoke
+    steps:
+      - uses: actions/checkout@v5
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl
+          coverage: none
+          tools: composer:v2
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Send controlled Resend smoke message
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM_ADDRESS: ${{ secrets.EMAIL_FROM_ADDRESS }}
+          EMAIL_FROM_NAME: WonderOS CI
+          RESEND_SMOKE_TO: ${{ secrets.RESEND_SMOKE_TO }}
+        run: php tools/resend-smoke-test.php

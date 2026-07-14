@@ -4,13 +4,13 @@ CREATE TABLE relationship_types (
     label VARCHAR(120) NOT NULL,
     inverse_label VARCHAR(120) NOT NULL,
     description TEXT NOT NULL,
-    symmetric BOOLEAN NOT NULL DEFAULT FALSE,
+    is_symmetric BOOLEAN NOT NULL DEFAULT FALSE,
     status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','deprecated')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CHECK ((symmetric = TRUE AND type = inverse_type) OR symmetric = FALSE)
+    CHECK ((is_symmetric = TRUE AND type = inverse_type) OR is_symmetric = FALSE)
 );
 
-INSERT INTO relationship_types (type, inverse_type, label, inverse_label, description, symmetric) VALUES
+INSERT INTO relationship_types (type, inverse_type, label, inverse_label, description, is_symmetric) VALUES
 ('associated_with','associated_with','associated with','associated with','A broad, non-causal association used only when a more precise type is unavailable.',TRUE),
 ('roosts_in','hosts_roost_of','roosts in','hosts roost of','The source regularly rests or shelters within the target.',FALSE),
 ('hosts_roost_of','roosts_in','hosts roost of','roosts in','The source provides a regular resting or shelter location for the target.',FALSE),
