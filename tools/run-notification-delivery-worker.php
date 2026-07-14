@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 use PDO;
 use Throwable;
-use WonderOS\Notifications\HttpEmailTransport;
+use WonderOS\Notifications\ResendEmailTransport;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 $pdo = new PDO((string) getenv('DATABASE_DSN'), (string) getenv('DATABASE_USER'), (string) getenv('DATABASE_PASSWORD'), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-$transport = new HttpEmailTransport((string) getenv('EMAIL_API_ENDPOINT'),(string) getenv('EMAIL_API_KEY'),(string) getenv('EMAIL_FROM_ADDRESS'),getenv('EMAIL_FROM_NAME') ?: 'WonderOS');
+$transport = new ResendEmailTransport((string)getenv('RESEND_API_KEY'),(string)getenv('EMAIL_FROM_ADDRESS'),getenv('EMAIL_FROM_NAME') ?: 'WonderOS');
 $maxAttempts=max(1,(int)(getenv('EMAIL_MAX_ATTEMPTS')?:5));
 $processed=$sent=$deferred=$failed=$suppressed=0;
 

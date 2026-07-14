@@ -5,12 +5,12 @@ declare(strict_types=1);
 use PDO;
 use Throwable;
 use WonderOS\Notifications\DeliveryPolicy;
-use WonderOS\Notifications\HttpEmailTransport;
+use WonderOS\Notifications\ResendEmailTransport;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 $pdo = new PDO((string)getenv('DATABASE_DSN'),(string)getenv('DATABASE_USER'),(string)getenv('DATABASE_PASSWORD'),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
-$transport = new HttpEmailTransport((string)getenv('EMAIL_API_ENDPOINT'),(string)getenv('EMAIL_API_KEY'),(string)getenv('EMAIL_FROM_ADDRESS'),getenv('EMAIL_FROM_NAME') ?: 'WonderOS');
+$transport = new ResendEmailTransport((string)getenv('RESEND_API_KEY'),(string)getenv('EMAIL_FROM_ADDRESS'),getenv('EMAIL_FROM_NAME') ?: 'WonderOS');
 $policy = new DeliveryPolicy($pdo);
 
 $query=$pdo->query("SELECT DISTINCT n.recipient_uuid,u.email,p.timezone,p.quiet_hours_start,p.quiet_hours_end FROM wonder_notification_deliveries d JOIN wonder_notifications n ON n.uuid=d.notification_uuid JOIN wonder_users u ON u.uuid=n.recipient_uuid JOIN wonder_notification_preferences p ON p.user_uuid=n.recipient_uuid WHERE d.status='queued' AND d.channel='digest' AND d.available_at<=NOW()");
@@ -20,7 +20,7 @@ foreach($query->fetchAll(PDO::FETCH_ASSOC) as $user){
     if(!$decision['allowed']){
         $statement=$pdo->prepare("UPDATE wonder_notification_deliveries d SET status='suppressed',failure_reason=:reason FROM wonder_notifications n WHERE d.notification_uuid=n.uuid AND d.status='queued' AND d.channel='digest' AND n.recipient_uuid=:recipient");
         $statement->execute(['reason'=>$decision['reason'],'recipient'=>$user['recipient_uuid']]);
-        $suppressed++; continue;
+        $suppressed++;continue;
     }
     $timezone=new DateTimeZone((string)$user['timezone']);$now=new DateTimeImmutable('now',$timezone);$clock=$now->format('H:i:s');$start=$user['quiet_hours_start'];$end=$user['quiet_hours_end'];
     $quiet=$start!==null&&$end!==null&&($start<$end?($clock>=$start&&$clock<$end):($clock>=$start||$clock<$end));
