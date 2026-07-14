@@ -2,7 +2,11 @@
 set -euo pipefail
 
 MIGRATION_DIR="${1:-database/migrations}"
+LOG_DIR="${MIGRATION_LOG_DIR:-artifacts/migrations}"
 PSQL=(psql "${DATABASE_DSN}" -X -v ON_ERROR_STOP=1 --set=VERBOSITY=verbose)
+
+mkdir -p "$LOG_DIR"
+rm -f "$LOG_DIR"/*.log 2>/dev/null || true
 
 mapfile -t ups < <(find "$MIGRATION_DIR" -maxdepth 1 -type f -name '*.up.sql' | sort)
 if [[ ${#ups[@]} -eq 0 ]]; then
@@ -12,8 +16,9 @@ fi
 
 apply_migration() {
   local file="$1"
-  local log_file status
-  log_file="$(mktemp)"
+  local base log_file status
+  base="$(basename "$file")"
+  log_file="$LOG_DIR/${base}.log"
 
   echo "::group::Applying $file"
   set +e
@@ -21,18 +26,17 @@ apply_migration() {
   status=$?
   set -e
 
+  cat "$log_file"
+
   if [[ $status -ne 0 ]]; then
-    cat "$log_file" >&2
     echo "::error file=$file::Migration failed with psql exit code $status: $file" >&2
+    echo "Complete PostgreSQL output saved to $log_file" >&2
     echo "Last 80 lines from PostgreSQL:" >&2
     tail -n 80 "$log_file" >&2
-    rm -f "$log_file"
     echo "::endgroup::"
     exit "$status"
   fi
 
-  cat "$log_file"
-  rm -f "$log_file"
   echo "::endgroup::"
 }
 
@@ -48,7 +52,7 @@ if [[ ! -f "$last_down" ]]; then
 fi
 
 echo "::group::Rolling back latest migration with $last_down"
-"${PSQL[@]}" -f "$last_down"
+"${PSQL[@]}" -f "$last_down" 2>&1 | tee "$LOG_DIR/$(basename "$last_down").log"
 echo "::endgroup::"
 
 apply_migration "$last_up"
