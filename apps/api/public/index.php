@@ -12,6 +12,7 @@ use WonderOS\Api\ClaimReviewApi;
 use WonderOS\Api\ClaimReviewQueueApi;
 use WonderOS\Api\EditorialLensStudioApi;
 use WonderOS\Api\EmailHealthApi;
+use WonderOS\Api\EmailReputationApi;
 use WonderOS\Api\EntityApi;
 use WonderOS\Api\GraphApi;
 use WonderOS\Api\NotificationApi;
@@ -41,6 +42,7 @@ $method=$_SERVER['REQUEST_METHOD']??'GET';$path=parse_url($_SERVER['REQUEST_URI'
 $headers=[];foreach(function_exists('getallheaders')?getallheaders():[] as $name=>$value){$headers[strtolower((string)$name)]=(string)$value;}
 $entityApi=new EntityApi($entities,$relationships,$relationshipTypes);$studioApi=new EditorialLensStudioApi($lenses,$graph,$auth);
 $response=(new EmailHealthApi($pdo,$auth))->handle($method,$path,$rawBody,$headers);
+if($response===null){$response=(new EmailReputationApi($pdo,$auth,$audit))->handle($method,$path,$rawBody,$headers);}
 if($response===null){$response=(new AuditApi($auth,$audit))->handle($method,$path,$headers,$_GET);}
 if($response===null){$response=(new AuthApi($auth,$authRepository,$audit))->handle($method,$path,$rawBody,$headers);}
 if($response===null){$response=(new NotificationPreferencesApi($pdo,$auth))->handle($method,$path,$rawBody,$headers);}
