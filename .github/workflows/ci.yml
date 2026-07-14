@@ -38,7 +38,7 @@ jobs:
       WONDEROS_TEST_DATABASE_USER: wonderos
       WONDEROS_TEST_DATABASE_PASSWORD: wonderos
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -86,7 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production-email-smoke
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
